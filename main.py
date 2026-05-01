@@ -3,6 +3,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'to_share', 'src'))
 
 import json
+import time
 import yaml
 import numpy as np
 from data import Imagenet64
@@ -33,26 +34,32 @@ def main():
 
     model = load_model(cfg['model'])
 
-    log_path = os.path.join(os.path.dirname(__file__), 'training_log.jsonl')
-    log_file = open(log_path, 'w')
+    log_path   = os.path.join(os.path.dirname(__file__), 'training_log.jsonl')
+    log_file   = open(log_path, 'w')
+    train_start = time.time()
 
     best_ari        = -1.0
     patience_count  = 0
+    train_time_acc  = 0.0
 
     for iteration in range(cfg['max_iterations']):
         images, _ = next(train_gen)
         fragments, labels = extract_fragments(np.array(images))
         adjacency = build_adjacency(n_images=cfg['n_images'])
 
+        t0   = time.time()
         loss = model.train_step(fragments, labels, adjacency)
+        train_time_acc += time.time() - t0
 
         if (iteration + 1) % cfg['eval_every'] == 0:
             val_images, _ = next(val_gen)
             val_fragments, val_labels = extract_fragments(np.array(val_images))
             val_adjacency = build_adjacency(n_images=cfg['n_images'])
 
+            t0          = time.time()
             adj_metrics = model.evaluate_adjacency(val_fragments, val_adjacency)
             cl_metrics  = compute_metrics(cluster(model.get_output(val_fragments)), val_labels)
+            eval_time   = time.time() - t0
 
             improved = cl_metrics['ari'] > best_ari
             if improved:
@@ -61,15 +68,19 @@ def main():
                 model.save(cfg['checkpoint_path'])
 
             log_entry = {
-                'iteration': iteration + 1,
-                'loss':      round(loss, 6),
-                'precision': round(adj_metrics['precision'], 4),
-                'recall':    round(adj_metrics['recall'],    4),
-                'f1':        round(adj_metrics['f1'],        4),
-                'ari':       round(cl_metrics['ari'],        4),
-                'nmi':       round(cl_metrics['nmi'],        4),
-                'purity':    round(cl_metrics['purity'],     4),
+                'iteration':       iteration + 1,
+                'timestamp':       round(time.time() - train_start, 1),
+                'loss':            round(loss, 6),
+                'precision':       round(adj_metrics['precision'], 4),
+                'recall':          round(adj_metrics['recall'],    4),
+                'f1':              round(adj_metrics['f1'],        4),
+                'ari':             round(cl_metrics['ari'],        4),
+                'nmi':             round(cl_metrics['nmi'],        4),
+                'purity':          round(cl_metrics['purity'],     4),
+                'train_time_s':    round(train_time_acc,           2),
+                'eval_time_s':     round(eval_time,                3),
             }
+            train_time_acc = 0.0
             log_file.write(json.dumps(log_entry) + '\n')
             log_file.flush()
 
