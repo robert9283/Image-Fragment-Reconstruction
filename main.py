@@ -16,9 +16,8 @@ def load_config(path='config.yaml'):
 
 def load_model(name):
     if name == 'fragment-adjacency-predictor':
-        # TODO: from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
-        # TODO: return FragmentAdjacencyPredictor()
-        raise NotImplementedError(f"Model '{name}' not yet implemented")
+        from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
+        return FragmentAdjacencyPredictor()
     # TODO: add further models here
     else:
         raise ValueError(f"Unknown model: '{name}'")
