@@ -157,6 +157,33 @@ and clustering — the edge weights are probabilities produced directly by the m
 spectral clustering operates on those weights natively.
 
 % ─────────────────────────────────────────────
+\section{Evaluation Metric: Adjusted Rand Index}
+
+The primary evaluation metric is the \textbf{Adjusted Rand Index (ARI)}. It measures
+how well the predicted clusters match the true groupings by counting fragment pairs:
+
+\begin{itemize}
+    \item A pair is a \textbf{true positive} if both fragments are in the same true group
+          and the same predicted cluster.
+    \item A pair is a \textbf{true negative} if they are in different true groups and
+          different predicted clusters.
+    \item All other pairs are errors.
+\end{itemize}
+
+The ``adjusted'' part corrects for chance — a random clustering would score
+$\text{ARI} = 0$, a perfect clustering scores $\text{ARI} = 1$, and a clustering
+worse than random can score below zero.
+
+ARI is preferred over simpler metrics such as purity because purity only looks at the
+dominant class in each cluster and ignores how errors are distributed. For example, a
+cluster containing 60\% of fragments from image A and 40\% from image B scores the same
+purity as a cluster containing 60\% from image A, 20\% from image B, and 20\% from image
+C — despite the latter being more disordered. ARI captures this distinction.
+
+\textbf{NMI (Normalised Mutual Information)} is reported alongside ARI as a
+complementary metric. It measures how much information the predicted clusters share with
+the true groupings, normalised to $[0, 1]$.
+
 \section{Decision Points Summary}
 % ─────────────────────────────────────────────
 
@@ -204,6 +231,12 @@ Evaluation metric & ARI, NMI & Purity \\
           discouraging memorisation. Expose as a hyperparameter in \texttt{config.yaml}.
     \item \textbf{Limit model capacity} — a small CNN has less capacity to memorise than
           a large one. Justify the chosen architecture size explicitly in the report.
+    \item \textbf{Balanced spectral clustering} — the current spectral clustering
+          implementation does not enforce equal cluster sizes. Since each source image
+          always produces exactly 16 fragments, the true clusters are perfectly balanced.
+          Constraining the clustering to produce balanced clusters of 16 would reduce
+          ambiguity and likely improve ARI. This requires a balanced variant of spectral
+          clustering or a post-processing step that reassigns fragments to enforce balance.
 \end{itemize}
 
 \printbibliography
