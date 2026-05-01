@@ -192,6 +192,20 @@ Evaluation metric & ARI, NMI & Purity \\
           quadratically and may become a bottleneck.
 \end{itemize}
 
+% ─────────────────────────────────────────────
+\section*{TODO}
+% ─────────────────────────────────────────────
+
+\begin{itemize}
+    \item \textbf{Dropout} — randomly disable neurons during training to prevent the
+          model from relying on memorised patterns. Add as a hyperparameter in
+          \texttt{config.yaml}.
+    \item \textbf{Weight decay} — penalise large weights via L2 regularisation,
+          discouraging memorisation. Expose as a hyperparameter in \texttt{config.yaml}.
+    \item \textbf{Limit model capacity} — a small CNN has less capacity to memorise than
+          a large one. Justify the chosen architecture size explicitly in the report.
+\end{itemize}
+
 \printbibliography
 
 \end{document}
