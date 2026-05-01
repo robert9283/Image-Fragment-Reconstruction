@@ -125,6 +125,36 @@ class FragmentAdjacencyPredictor(BaseModel):
 
         return similarity.cpu().numpy()
 
+    def evaluate_adjacency(self, fragments, adjacency):
+        """
+        Computes precision, recall and F1 for the adjacency prediction task.
+        fragments:  (N, 16, 16, 3)
+        adjacency:  (N, N) binary ground truth adjacency matrix
+        Returns dict with precision, recall, f1.
+        """
+        self.encoder.eval()
+        self.head.eval()
+
+        with torch.no_grad():
+            x = self._to_tensor(fragments)
+            embeddings = self.encoder(x)
+            n = embeddings.shape[0]
+            idx_i, idx_j = torch.triu_indices(n, n, offset=1)
+            probs = self.head(embeddings[idx_i], embeddings[idx_j]).cpu().numpy()
+
+        targets = adjacency[idx_i.cpu(), idx_j.cpu()]
+        preds   = (probs >= 0.5).astype(int)
+
+        tp = ((preds == 1) & (targets == 1)).sum()
+        fp = ((preds == 1) & (targets == 0)).sum()
+        fn = ((preds == 0) & (targets == 1)).sum()
+
+        precision = tp / (tp + fp + 1e-8)
+        recall    = tp / (tp + fn + 1e-8)
+        f1        = 2 * precision * recall / (precision + recall + 1e-8)
+
+        return {'precision': float(precision), 'recall': float(recall), 'f1': float(f1)}
+
     def save(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         torch.save({

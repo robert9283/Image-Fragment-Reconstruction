@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import linear_sum_assignment
 from data import Imagenet64
 from src.fragments import extract_fragments, GRID, FRAGMENT_SIZE
-from src.evaluate import cluster, compute_metrics
+from src.clustering import cluster, compute_metrics
 from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
 
 # ── edit these two paths ──────────────────────────────────────────────────────
