@@ -19,10 +19,7 @@ def load_model(name):
         # TODO: from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
         # TODO: return FragmentAdjacencyPredictor()
         raise NotImplementedError(f"Model '{name}' not yet implemented")
-    elif name == 'contrastive':
-        # TODO: from src.contrastive import ContrastiveModel
-        # TODO: return ContrastiveModel()
-        raise NotImplementedError(f"Model '{name}' not yet implemented")
+    # TODO: add further models here
     else:
         raise ValueError(f"Unknown model: '{name}'")
 

@@ -1,7 +1,7 @@
 data_path: to_share/data
 checkpoint_path: checkpoints/model
 
-model: fragment-adjacency-predictor  # options: fragment-adjacency-predictor, contrastive
+model: fragment-adjacency-predictor
 
 n_images: 10
 n_iterations: 1000
