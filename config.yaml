@@ -4,6 +4,6 @@ checkpoint_path: checkpoints/model
 model: fragment-adjacency-predictor
 
 n_images: 10
-max_iterations: 10000
-eval_every: 100
+max_iterations: 25000
+eval_every: 250
 patience: 10

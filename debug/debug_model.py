@@ -9,13 +9,22 @@ import os
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from debug.utils import load_batch, plot_matrix, GRID, N_IMAGES
 from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
 
+CHECKPOINT = os.path.join(os.path.dirname(__file__), '..', 'checkpoints', 'model')
+
 images, fragments, labels, adjacency = load_batch(augmentation=False)
 
-model  = FragmentAdjacencyPredictor()
+model = FragmentAdjacencyPredictor()
+if os.path.exists(CHECKPOINT + '.pt'):
+    model.load(CHECKPOINT)
+    print("Loaded checkpoint.")
+else:
+    print("No checkpoint found — using untrained model.")
 similarity = model.get_output(fragments)
 
 print(f"similarity shape: {similarity.shape}")
