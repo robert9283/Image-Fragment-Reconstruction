@@ -2,6 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'to_share', 'src'))
 
+import json
 import yaml
 import numpy as np
 from data import Imagenet64
@@ -32,6 +33,9 @@ def main():
 
     model = load_model(cfg['model'])
 
+    log_path = os.path.join(os.path.dirname(__file__), 'training_log.jsonl')
+    log_file = open(log_path, 'w')
+
     best_ari        = -1.0
     patience_count  = 0
 
@@ -56,6 +60,19 @@ def main():
                 patience_count = 0
                 model.save(cfg['checkpoint_path'])
 
+            log_entry = {
+                'iteration': iteration + 1,
+                'loss':      round(loss, 6),
+                'precision': round(adj_metrics['precision'], 4),
+                'recall':    round(adj_metrics['recall'],    4),
+                'f1':        round(adj_metrics['f1'],        4),
+                'ari':       round(cl_metrics['ari'],        4),
+                'nmi':       round(cl_metrics['nmi'],        4),
+                'purity':    round(cl_metrics['purity'],     4),
+            }
+            log_file.write(json.dumps(log_entry) + '\n')
+            log_file.flush()
+
             print(
                 f"iter {iteration+1:5d}  loss={loss:.4f}"
                 f"  F1={adj_metrics['f1']:.3f}  prec={adj_metrics['precision']:.3f}  rec={adj_metrics['recall']:.3f}"
@@ -68,7 +85,9 @@ def main():
                 print(f"Early stopping: no improvement for {cfg['patience']} evaluations.")
                 break
 
+    log_file.close()
     print(f"Best ARI={best_ari:.3f}. Checkpoint saved to {cfg['checkpoint_path']}")
+    print(f"Training log saved to {log_path}")
 
 
 if __name__ == '__main__':
