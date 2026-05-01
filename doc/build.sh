@@ -3,11 +3,11 @@ set -e
 
 cd "$(dirname "$0")"
 
-pdflatex -interaction=nonstopmode summary.tex
-biber summary
-pdflatex -interaction=nonstopmode summary.tex
-pdflatex -interaction=nonstopmode summary.tex
-
-rm -f summary.aux summary.bbl summary.bcf summary.blg summary.log summary.out summary.run.xml summary.toc
-
-echo "Done: summary.pdf"
+for doc in summary approach_siamese; do
+    pdflatex -interaction=nonstopmode ${doc}.tex
+    biber ${doc}
+    pdflatex -interaction=nonstopmode ${doc}.tex
+    pdflatex -interaction=nonstopmode ${doc}.tex
+    rm -f ${doc}.aux ${doc}.bbl ${doc}.bcf ${doc}.blg ${doc}.log ${doc}.out ${doc}.run.xml ${doc}.toc
+    echo "Done: ${doc}.pdf"
+done
