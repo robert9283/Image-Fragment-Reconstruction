@@ -22,8 +22,10 @@ images, fragments, labels, adjacency = load_batch(augmentation=False)
 model = FragmentAdjacencyPredictor()
 if os.path.exists(CHECKPOINT + '.pt'):
     model.load(CHECKPOINT)
+    model_label = 'trained'
     print("Loaded checkpoint.")
 else:
+    model_label = 'untrained'
     print("No checkpoint found — using untrained model.")
 similarity = model.get_output(fragments)
 
@@ -35,7 +37,7 @@ print(f"similarity mean:  {similarity.mean():.3f}")
 fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 for ax, matrix, title in zip(axes,
                               [adjacency, similarity],
-                              ['Ground truth adjacency', 'Predicted similarity (untrained)']):
+                              ['Ground truth adjacency', f'Predicted similarity ({model_label})']):
     im = ax.imshow(matrix, cmap='Blues', aspect='auto', vmin=0, vmax=1)
     ax.set_title(title, fontsize=11)
     ax.set_xlabel('fragment index')
@@ -55,7 +57,7 @@ rows, cols = np.triu_indices(n, k=1)
 scores     = similarity[rows, cols]
 top_idx    = np.argsort(scores)[::-1][:10]
 
-print("\nTop 10 predicted pairs (untrained model):")
+print(f"\nTop 10 predicted pairs ({model_label} model):")
 print(f"{'rank':>4}  {'frag_i':>6}  {'frag_j':>6}  {'score':>6}  {'src_i':>5}  {'src_j':>5}  {'truly adjacent':>14}")
 for rank, idx in enumerate(top_idx):
     i, j    = rows[idx], cols[idx]
@@ -66,7 +68,7 @@ for rank, idx in enumerate(top_idx):
 
 # ── 3. visualise the top-6 predicted pairs ───────────────────────────────────
 fig, axes = plt.subplots(2, 6, figsize=(18, 6))
-fig.suptitle('Top 6 predicted pairs (untrained) — green border = truly adjacent', fontsize=11)
+fig.suptitle(f'Top 6 predicted pairs ({model_label}) — green border = truly adjacent', fontsize=11)
 for col, idx in enumerate(top_idx[:6]):
     i, j      = rows[idx], cols[idx]
     truly_adj = bool(adjacency[i, j])
