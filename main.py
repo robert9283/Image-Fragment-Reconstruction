@@ -29,10 +29,14 @@ def main():
 
     dataset   = Imagenet64(cfg['data_path'])
     train_gen = dataset.datagen_cls(batch_size=cfg['n_images'], ds='train', augmentation=True)
+    val_gen   = dataset.datagen_cls(batch_size=cfg['n_images'], ds='test',  augmentation=False)
 
     model = load_model(cfg['model'])
 
-    for iteration in range(cfg['n_iterations']):
+    best_ari        = -1.0
+    patience_count  = 0
+
+    for iteration in range(cfg['max_iterations']):
         images, _ = next(train_gen)
         fragments, labels = extract_fragments(np.array(images))
         adjacency = build_adjacency(n_images=cfg['n_images'])
@@ -40,13 +44,27 @@ def main():
         loss = model.train_step(fragments, labels, adjacency)
 
         if (iteration + 1) % cfg['eval_every'] == 0:
-            model_output = model.get_output(fragments)
-            pred_labels  = cluster(model_output)
-            metrics      = compute_metrics(pred_labels, labels)
-            print(f"iter {iteration+1:4d}  loss={loss:.4f}  ARI={metrics['ari']:.3f}  NMI={metrics['nmi']:.3f}  purity={metrics['purity']:.3f}")
+            val_images, _ = next(val_gen)
+            val_fragments, val_labels = extract_fragments(np.array(val_images))
 
-    model.save(cfg['checkpoint_path'])
-    print(f"Checkpoint saved to {cfg['checkpoint_path']}")
+            model_output = model.get_output(val_fragments)
+            pred_labels  = cluster(model_output)
+            metrics      = compute_metrics(pred_labels, val_labels)
+
+            improved = metrics['ari'] > best_ari
+            if improved:
+                best_ari       = metrics['ari']
+                patience_count = 0
+                model.save(cfg['checkpoint_path'])
+
+            print(f"iter {iteration+1:5d}  loss={loss:.4f}  ARI={metrics['ari']:.3f}  NMI={metrics['nmi']:.3f}  purity={metrics['purity']:.3f}  {'*' if improved else ''}")
+
+            patience_count += 1
+            if patience_count >= cfg['patience']:
+                print(f"Early stopping: no improvement for {cfg['patience']} evaluations.")
+                break
+
+    print(f"Best ARI={best_ari:.3f}. Checkpoint saved to {cfg['checkpoint_path']}")
 
 
 if __name__ == '__main__':
