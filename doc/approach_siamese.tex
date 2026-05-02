@@ -467,38 +467,21 @@ plus the overlay plot \texttt{runs\_comparison.png}.)}
 \section{Failure Modes}
 % ─────────────────────────────────────────────
 
-A non-trivial fraction of fragments are misclassified even by the best
-checkpoint. We inspect representative failures to understand whether the
-remaining ARI gap is solvable by a stronger model, or whether it reflects an
-intrinsic limit of the data.
+Figure~\ref{fig:failure-modes} shows four misclassified fragments from the
+best checkpoint. The model produces only an unordered partition into $k = 10$
+clusters with arbitrary integer IDs; to relate them to source images for
+this visualisation we align cluster IDs to true source IDs by Hungarian
+matching on the validation batch
+(\texttt{scipy.optimize.linear\_sum\_assignment} on the $10 \times 10$
+confusion matrix). The rightmost column then shows the source image whose
+fragments form the plurality of the cluster the misclassified fragment was
+assigned to. The matching is per-batch and uses the true labels; the model
+itself has no notion of source identity.
 
 \input{fig_failure_modes.tex}
 
-The failures break down into three recurring categories:
-
-\begin{itemize}
-    \item \textbf{Near-uniform low-information fragments.} Sky patches, walls,
-          smooth dark backgrounds, uniformly coloured regions. Multiple source
-          images in any given batch contain such regions, and a $16 \times 16$
-          patch from one is essentially indistinguishable from a $16 \times 16$
-          patch from another. No amount of additional model capacity will
-          resolve this --- the information is not there.
-    \item \textbf{Repetitive textures.} Foliage, fur, gravel. Visually
-          distinctive at the global scale of an image but ambiguous at a
-          $16 \times 16$ window where most patches simply look like ``green
-          leaf-shaped texture'' or ``brown fur''. These are partially
-          resolvable by a more sophisticated model that can leverage subtle
-          colour or scale cues.
-    \item \textbf{Edge / boundary fragments.} Patches sitting on the boundary
-          between two distinct regions of an image (e.g.\ an animal silhouette
-          against grass). The mixed content makes them harder to associate
-          with the rest of their source image. These should in principle be
-          resolvable.
-\end{itemize}
-
-The first category is the dominant one in the figure and represents an
-intrinsic ceiling on ARI for any method operating on these
-$16 \times 16$ augmented patches without auxiliary information.
+A reliable taxonomy of failure modes would require aggregating misclassified
+fragments across many batches, which we leave as follow-up work.
 
 % ─────────────────────────────────────────────
 \section{Decision Points Summary}
