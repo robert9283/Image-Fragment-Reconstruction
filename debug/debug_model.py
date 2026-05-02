@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from debug.utils import load_batch, plot_matrix, GRID, N_IMAGES
 from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
 
-CHECKPOINT = os.path.join(os.path.dirname(__file__), '..', 'checkpoints', 'model')
+CHECKPOINT = os.path.join(os.path.dirname(__file__), '..', 'runs', 'latest', 'model')
 
 images, fragments, labels, adjacency = load_batch(augmentation=False)
 

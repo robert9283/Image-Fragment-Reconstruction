@@ -7,3 +7,9 @@ checkpoints/
 training_log.jsonl
 results.json
 src/clustering_visualisation.png
+
+# per-run artifacts: ignore large checkpoints and logs, but keep config + notes
+runs/*/model.pt
+runs/*/training_log.jsonl
+runs/latest
+runs_comparison.png

@@ -4,11 +4,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'to_share', 'src'))
 
 import json
 import time
+import datetime
+import shutil
 import yaml
 import numpy as np
 from data import Imagenet64
 from src.fragments import extract_fragments, build_adjacency, GRID
 from src.clustering import cluster, compute_metrics
+
+
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 def load_config(path='config.yaml'):
@@ -25,8 +30,55 @@ def load_model(name):
         raise ValueError(f"Unknown model: '{name}'")
 
 
+def setup_run_dir(cfg):
+    """
+    Create runs/{run_name}/, snapshot the config, refresh the runs/latest symlink.
+    Returns the absolute path of the run directory.
+    """
+    run_name = cfg.get('run_name') or datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
+    run_dir  = os.path.join(PROJECT_ROOT, 'runs', run_name)
+    os.makedirs(run_dir, exist_ok=True)
+
+    with open(os.path.join(run_dir, 'config.yaml'), 'w') as f:
+        yaml.safe_dump(cfg, f, sort_keys=False)
+
+    latest = os.path.join(PROJECT_ROOT, 'runs', 'latest')
+    if os.path.islink(latest) or os.path.exists(latest):
+        os.remove(latest)
+    os.symlink(run_name, latest)
+
+    return run_dir, run_name
+
+
+def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, log_path):
+    """Append a one-line summary of this run to the top-level results.jsonl."""
+    with open(log_path) as f:
+        entries = [json.loads(line) for line in f]
+    last = entries[-1] if entries else {}
+
+    summary = {
+        'run':           run_name,
+        'model':         cfg.get('model'),
+        'best_ari':      round(best_ari, 4),
+        'iter_at_best':  best_iter,
+        'final_f1':      last.get('f1'),
+        'final_ari':     last.get('ari'),
+        'final_nmi':     last.get('nmi'),
+        'duration_min':  round(total_minutes, 1),
+        'n_eval_batches':    cfg.get('n_eval_batches', 1),
+        'balanced_clustering': cfg.get('balanced_clustering', False),
+        'notes':         cfg.get('notes', ''),
+    }
+    results_path = os.path.join(PROJECT_ROOT, 'results.jsonl')
+    with open(results_path, 'a') as f:
+        f.write(json.dumps(summary) + '\n')
+
+
 def main():
     cfg = load_config()
+    run_dir, run_name = setup_run_dir(cfg)
+    print(f"Run: {run_name}")
+    print(f"Dir: {run_dir}")
 
     dataset   = Imagenet64(cfg['data_path'])
     train_gen = dataset.datagen_cls(batch_size=cfg['n_images'], ds='train', augmentation=True)
@@ -34,11 +86,13 @@ def main():
 
     model = load_model(cfg['model'])
 
-    log_path   = os.path.join(os.path.dirname(__file__), 'training_log.jsonl')
-    log_file   = open(log_path, 'w')
-    train_start = time.time()
+    log_path        = os.path.join(run_dir, 'training_log.jsonl')
+    checkpoint_path = os.path.join(run_dir, 'model')
+    log_file        = open(log_path, 'w')
+    train_start     = time.time()
 
     best_ari        = -1.0
+    best_iter       = 0
     patience_count  = 0
     train_time_acc  = 0.0
 
@@ -74,8 +128,9 @@ def main():
             improved = cl_metrics['ari'] > best_ari
             if improved:
                 best_ari       = cl_metrics['ari']
+                best_iter      = iteration + 1
                 patience_count = 0
-                model.save(cfg['checkpoint_path'])
+                model.save(checkpoint_path)
 
             log_entry = {
                 'iteration':       iteration + 1,
@@ -107,8 +162,11 @@ def main():
                 break
 
     log_file.close()
-    print(f"Best ARI={best_ari:.3f}. Checkpoint saved to {cfg['checkpoint_path']}")
-    print(f"Training log saved to {log_path}")
+    total_minutes = (time.time() - train_start) / 60
+    append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, log_path)
+    print(f"Best ARI={best_ari:.3f} at iteration {best_iter}.")
+    print(f"Run directory: {run_dir}")
+    print(f"Summary appended to {os.path.join(PROJECT_ROOT, 'results.jsonl')}")
 
 
 if __name__ == '__main__':

@@ -13,7 +13,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-LOG_PATH = os.path.join(os.path.dirname(__file__), '..', 'training_log.jsonl')
+LOG_PATH = os.path.join(os.path.dirname(__file__), '..', 'runs', 'latest', 'training_log.jsonl')
 
 if not os.path.exists(LOG_PATH):
     print(f"No training log found at {LOG_PATH}. Run main.py first.")
