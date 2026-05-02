@@ -36,7 +36,7 @@ class CNNEncoder(nn.Module):
 
 
 class ComparisonHead(nn.Module):
-    """Takes two embeddings and predicts adjacency probability."""
+    """Takes two embeddings and predicts a binary probability."""
 
     def __init__(self, embedding_dim=256):
         super().__init__()
@@ -53,34 +53,68 @@ class ComparisonHead(nn.Module):
 
 
 class FragmentAdjacencyPredictor(BaseModel):
+    """
+    Siamese CNN with one or two prediction heads:
+
+    - The adjacency head predicts whether two fragments are spatially adjacent
+      in their source image. The labels come from the grid structure.
+    - The optional same-image head predicts whether two fragments come from
+      the same source image. The labels come from `labels` passed to
+      train_step. This head is only created when `lambda_same > 0`.
+
+    The total loss is
+
+        L = lambda_adj * WBCE(adjacency)  +  lambda_same * WBCE(same_image),
+
+    where each WBCE is weighted by its own pos_weight (default 1, i.e. plain
+    BCE; see results section of the doc for why this choice was made).
+
+    At inference, get_output returns the similarity matrix used by the
+    downstream clustering. When the same-image head is active, its
+    probabilities are returned, since they are more directly aligned with
+    the clustering objective. Otherwise the adjacency-head probabilities
+    are returned.
+    """
 
     def __init__(self, embedding_dim=256, dropout=0.3, lr=1e-3, weight_decay=1e-4,
-                 pos_weight=52.0):
-        """
-        pos_weight: per-positive class weight in the WBCE loss. The natural
-            class-balanced value is n_neg / n_pos = 52 for our 10-image, 4x4
-            grid configuration. Multiply by a tilt parameter beta > 1 to push
-            toward higher recall.
-        """
+                 pos_weight_adj=1.0, lambda_adj=1.0,
+                 pos_weight_same=1.0, lambda_same=0.0):
         self.device  = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.encoder = CNNEncoder(embedding_dim, dropout).to(self.device)
-        self.head    = ComparisonHead(embedding_dim).to(self.device)
-        self.optimizer = torch.optim.Adam(
-            list(self.encoder.parameters()) + list(self.head.parameters()),
-            lr=lr,
-            weight_decay=weight_decay,
-        )
+        self.adj_head = ComparisonHead(embedding_dim).to(self.device)
+
+        self.lambda_adj  = float(lambda_adj)
+        self.lambda_same = float(lambda_same)
+        self.pos_weight_adj  = float(pos_weight_adj)
+        self.pos_weight_same = float(pos_weight_same)
+
+        params = list(self.encoder.parameters()) + list(self.adj_head.parameters())
+        if self.lambda_same > 0:
+            self.same_head = ComparisonHead(embedding_dim).to(self.device)
+            params += list(self.same_head.parameters())
+        else:
+            self.same_head = None
+
+        self.optimizer = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
         self.loss_fn   = nn.BCELoss(reduction='none')
-        self.pos_weight = pos_weight
 
     def _to_tensor(self, fragments):
         x = torch.tensor(fragments, dtype=torch.float32)
         x = x.permute(0, 3, 1, 2)                       # (N, H, W, C) → (N, C, H, W)
         return x.to(self.device)
 
+    def _wbce(self, preds, targets, pos_weight):
+        """Properly weighted BCE: per-pair losses, weighted, then mean."""
+        weight = torch.where(targets == 1,
+                             torch.tensor(pos_weight, device=self.device),
+                             torch.ones((), device=self.device))
+        return (self.loss_fn(preds, targets) * weight).mean()
+
     def train_step(self, fragments, labels, adjacency):
         self.encoder.train()
-        self.head.train()
+        self.adj_head.train()
+        if self.same_head is not None:
+            self.same_head.train()
 
         x = self._to_tensor(fragments)
         embeddings = self.encoder(x)                     # (N, D)
@@ -91,21 +125,23 @@ class FragmentAdjacencyPredictor(BaseModel):
         emb_i = embeddings[idx_i]
         emb_j = embeddings[idx_j]
 
-        preds  = self.head(emb_i, emb_j)
-        targets = torch.tensor(
+        # adjacency loss
+        adj_targets = torch.tensor(
             adjacency[idx_i.cpu(), idx_j.cpu()],
             dtype=torch.float32,
             device=self.device,
         )
+        adj_preds = self.adj_head(emb_i, emb_j)
+        loss = self.lambda_adj * self._wbce(adj_preds, adj_targets, self.pos_weight_adj)
 
-        # weighted BCE: positives get weight self.pos_weight, negatives get weight 1.
-        # the per-pair losses are reduced AFTER the weight is applied (reduction='none'
-        # in self.loss_fn), so the weighting is actually effective.
-        weight = torch.where(targets == 1,
-                             torch.tensor(self.pos_weight, device=self.device),
-                             torch.ones((), device=self.device))
-        per_pair_losses = self.loss_fn(preds, targets)
-        loss = (per_pair_losses * weight).mean()
+        # same-image loss
+        if self.same_head is not None:
+            labels_t = torch.tensor(labels, dtype=torch.long, device=self.device)
+            same_targets = (labels_t[idx_i] == labels_t[idx_j]).float()
+            same_preds   = self.same_head(emb_i, emb_j)
+            loss = loss + self.lambda_same * self._wbce(
+                same_preds, same_targets, self.pos_weight_same
+            )
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -114,9 +150,14 @@ class FragmentAdjacencyPredictor(BaseModel):
         return loss.item()
 
     def get_output(self, fragments):
-        """Returns (N, N) similarity matrix for spectral clustering."""
+        """
+        Returns (N, N) similarity matrix for clustering. Uses the same-image
+        head's output when it exists, otherwise the adjacency head's output.
+        """
         self.encoder.eval()
-        self.head.eval()
+        self.adj_head.eval()
+        if self.same_head is not None:
+            self.same_head.eval()
 
         with torch.no_grad():
             x = self._to_tensor(fragments)
@@ -127,10 +168,12 @@ class FragmentAdjacencyPredictor(BaseModel):
             idx_i, idx_j = torch.triu_indices(n, n, offset=1)
             emb_i = embeddings[idx_i]
             emb_j = embeddings[idx_j]
-            probs = self.head(emb_i, emb_j)
+
+            head = self.same_head if self.same_head is not None else self.adj_head
+            probs = head(emb_i, emb_j)
 
             similarity[idx_i, idx_j] = probs
-            similarity[idx_j, idx_i] = probs             # symmetric
+            similarity[idx_j, idx_i] = probs
 
         return similarity.cpu().numpy()
 
@@ -142,24 +185,19 @@ class FragmentAdjacencyPredictor(BaseModel):
         AUPRC (average precision) is the more meaningful number on this
         imbalanced setting (~1.9% positives); AUROC is reported alongside as
         a sanity check.
-
-        fragments:  (N, 16, 16, 3)
-        adjacency:  (N, N) binary ground truth adjacency matrix
-        Returns dict with auroc, auprc.
         """
         from sklearn.metrics import roc_auc_score, average_precision_score
         self.encoder.eval()
-        self.head.eval()
+        self.adj_head.eval()
 
         with torch.no_grad():
             x = self._to_tensor(fragments)
             embeddings = self.encoder(x)
             n = embeddings.shape[0]
             idx_i, idx_j = torch.triu_indices(n, n, offset=1)
-            probs = self.head(embeddings[idx_i], embeddings[idx_j]).cpu().numpy()
+            probs = self.adj_head(embeddings[idx_i], embeddings[idx_j]).cpu().numpy()
 
         targets = adjacency[idx_i.cpu(), idx_j.cpu()]
-
         return {
             'auroc': float(roc_auc_score(targets, probs)),
             'auprc': float(average_precision_score(targets, probs)),
@@ -167,12 +205,19 @@ class FragmentAdjacencyPredictor(BaseModel):
 
     def save(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        torch.save({
-            'encoder': self.encoder.state_dict(),
-            'head':    self.head.state_dict(),
-        }, path + '.pt')
+        state = {
+            'encoder':  self.encoder.state_dict(),
+            'adj_head': self.adj_head.state_dict(),
+        }
+        if self.same_head is not None:
+            state['same_head'] = self.same_head.state_dict()
+        torch.save(state, path + '.pt')
 
     def load(self, path):
         checkpoint = torch.load(path + '.pt', map_location=self.device)
         self.encoder.load_state_dict(checkpoint['encoder'])
-        self.head.load_state_dict(checkpoint['head'])
+        # backward compat: old checkpoints stored adjacency head under 'head'
+        adj_state = checkpoint.get('adj_head', checkpoint.get('head'))
+        self.adj_head.load_state_dict(adj_state)
+        if 'same_head' in checkpoint and self.same_head is not None:
+            self.same_head.load_state_dict(checkpoint['same_head'])

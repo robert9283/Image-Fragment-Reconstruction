@@ -1,11 +1,11 @@
 data_path: to_share/data
 model: fragment-adjacency-predictor
-run_name: wbce_beta_1
-notes: weighted BCE, textbook class-balanced (pos_weight=52)
+run_name: plain_bce
+notes: 'plain BCE: pos_weight = beta * 52 = 1'
 n_images: 10
 max_iterations: 25000
 eval_every: 250
 patience: 10
-beta: 1.0
+beta: 0.01923
 n_eval_batches: 20
 balanced_clustering: true

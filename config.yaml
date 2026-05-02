@@ -1,19 +1,22 @@
 data_path: to_share/data
-
 model: fragment-adjacency-predictor
 
-# run identification (omit run_name to auto-generate from timestamp)
-run_name: wbce_beta_03
-notes: "fractional tilt; beta=1 overshot (recall 0.98 / prec 0.11)"
+run_name: plain_bce
+notes: "plain BCE: pos_weight = beta * 52 = 1"
 
 n_images: 10
 max_iterations: 25000
 eval_every: 250
 patience: 10
 
-# loss
-beta: 0.3                   # tilt parameter for WBCE: w_+ = beta * (n_-/n_+) = beta * 52
+# loss — adjacency head
+beta: 0.01923                   # tilt parameter for WBCE: w_+ = beta * (n_-/n_+) = beta * 52
+lambda_adj: 1.0                 # weight on the adjacency BCE loss
+
+# loss — same-image head (multi-task)
+lambda_same: 0.0                # set > 0 to enable the same-image prediction head
+pos_weight_same: 1.0            # plain BCE for the same-image head
 
 # evaluation
-n_eval_batches: 20          # average ARI/F1 over this many fresh validation batches
-balanced_clustering: true   # enforce exactly 16 fragments per cluster
+n_eval_batches: 20              # average ARI/F1 over this many fresh validation batches
+balanced_clustering: true       # enforce exactly 16 fragments per cluster

@@ -35,7 +35,12 @@ def load_model(name, cfg):
         from src.fragments import GRID
         beta = float(cfg.get('beta', 1.0))
         ratio = n_neg_over_n_pos(cfg['n_images'], GRID)
-        return FragmentAdjacencyPredictor(pos_weight=beta * ratio)
+        return FragmentAdjacencyPredictor(
+            pos_weight_adj  = beta * ratio,
+            lambda_adj      = float(cfg.get('lambda_adj',  1.0)),
+            pos_weight_same = float(cfg.get('pos_weight_same', 1.0)),
+            lambda_same     = float(cfg.get('lambda_same', 0.0)),
+        )
     # TODO: add further models here
     else:
         raise ValueError(f"Unknown model: '{name}'")
@@ -71,6 +76,8 @@ def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, lo
         'run':           run_name,
         'model':         cfg.get('model'),
         'beta':          cfg.get('beta', 1.0),
+        'lambda_adj':    cfg.get('lambda_adj',  1.0),
+        'lambda_same':   cfg.get('lambda_same', 0.0),
         'best_ari':      round(best_ari, 4),
         'iter_at_best':  best_iter,
         'final_auroc':   last.get('auroc'),

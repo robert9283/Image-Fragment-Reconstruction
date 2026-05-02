@@ -7,6 +7,13 @@
 -in section 6.3 of the loss function please also mention which value of the tilt parameter corresponds to the normal case where the weighted binary cross entropy correspinds to binary cross entropy
 - shorten the paragraph: "Why we lean toward a moderate-to-aggressive tilt. " to a few sentences. No seperate paragraph is necessary
 - in fig 1 "Figure 1: Schematic of the predicted similarity graph. " the two label text for the purple and orange node in the caption overlapp so that the text is cutoff.
+- in section 7 you write that p reflects the models probability. I think that is wrong it is just a measure of confidence.
+- in section 7 "From Pretext Task to Clustering" the two paragraph "Decision point: clustering on the graph. Spectral clustering" and "Balanced spectral clustering." can be merged since we do not use anymore spectral clustering by itself. Do not mention the libraries used in the text. You can add them into footnotes. Add the formula of spectral clustering and explain very briefly baanced spectral clustering. The paragraph "Metric consistency." can be removed.
+- the title "Evaluation Metric: Adjusted Rand Index" is a bit misleading since we have two task. You shoud specifiy that you mean the evaluation metric for the clustering of the image fragments. Please make that also in the section clear.
+- in section "Experimental Setup" the text "random_state = 42 insklearn.cluster.Spec
+KMeans, andSpectralEmbedding)" gets cutoff. Also I think this can be moved into a foot note.
+- i would like that file siamese_approach.tex gets renamed into something more meaningful. The siamese_approach is not so telling.
+- can you take the summary.tex out of the git but leave it in the folder so I wont publish this later accidedently
 
 ## Done
 

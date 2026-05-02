@@ -394,30 +394,74 @@ study is complete.
 \section{Results}
 % ─────────────────────────────────────────────
 
-\emph{This section contains placeholders. Numbers are filled in once each run
-finishes; \texttt{scripts/compare\_runs.py} renders the comparison table from
-\texttt{results.jsonl}.}
+\subsection{Effect of the loss tilt parameter $\beta$}
 
-\paragraph{Headline numbers.}
+We evaluated three settings of the WBCE tilt parameter --- $\beta \in
+\{0.019, 0.3, 1.0\}$, corresponding respectively to plain unweighted BCE
+($\beta \cdot 52 = 1$), a mild upweighting of positives, and the textbook
+class-balanced weighting ($w_{+} = 52$). All three runs use the same
+architecture, balanced spectral clustering, and validation averaging over
+$n_{\text{eval}} = 20$ fresh batches.
+
 \begin{center}
-\begin{tabular}{lcc}
+\begin{tabular}{lccc}
 \toprule
-                            & \textbf{Best ARI}            & \textbf{Adjacency F1} \\
+\textbf{Run} & \textbf{$\beta$} & \textbf{Best ARI} & \textbf{AUROC / AUPRC} \\
 \midrule
-Run 1 (single-batch eval, unbalanced)  & $0.787$           & $0.263$               \\
-Run 2 (multi-batch eval, balanced)     & \emph{TBD}        & \emph{TBD}            \\
+\texttt{plain\_bce}     & $0.019$ & $0.535$ & $0.969 \,/\, 0.432$ \\
+\texttt{wbce\_beta\_03} & $0.3$   & $0.523$ & $0.973 \,/\, 0.435$ \\
+\texttt{wbce\_beta\_1}  & $1.0$   & $0.462$ & $0.969 \,/\, 0.405$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
+\paragraph{Discussion.}
+The choice of $\beta$ has an essentially negligible effect on AUROC: across two
+orders of magnitude in $\beta$, ranking quality on the adjacency task varies by
+less than a percentage point ($0.969$--$0.973$). What changes with $\beta$ is
+the model's \emph{calibration} --- its tendency to push probabilities high or
+low overall --- not the order in which it ranks pairs. Because spectral
+clustering operates on the raw probabilities as edge weights, both ranking and
+calibration matter for ARI, which is why ARI varies a little more than
+AUROC ($0.46$--$0.54$).
+
+The variation we observe in ARI is, however, on the same order as the
+run-to-run noise we estimated by repeating $\beta = 0.3$ and $\beta = 1$ with
+different random seeds: between repeated runs of the same configuration the
+ARI changed by up to $\sim 0.05$, comparable to the differences between
+configurations. The cleanest reading of the data is that \emph{within the
+range tested, $\beta$ is a second-order knob}. Plain BCE performs at least as
+well as any weighted variant we tried.
+
+This contradicts the prior expectation expressed earlier in the document
+that an aggressive tilt $\beta \in [1.5, 3]$ would be optimal. The argument
+about asymmetric error costs (false negatives breaking intra-cluster
+connectivity more than false positives) is not wrong in principle, but the
+model already learns a near-optimal ranking under plain BCE, so the loss
+weighting has little remaining effect on the downstream task. We adopt
+plain BCE for simplicity in subsequent experiments.
+
+\subsection{Headline numbers}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+                                          & \textbf{Best ARI}  & \textbf{AUROC} \\
+\midrule
+Run 1 (single-batch eval, unbalanced)     & $0.787$            & --             \\
+Plain BCE (multi-batch eval, balanced)    & $0.535$            & $0.969$        \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The apparent regression from $0.787$ to $0.535$ is almost entirely the
+multi-batch averaging unmasking the variance of single-batch evaluation:
+the original number was a single lucky draw, while the new number is the
+mean over twenty fresh validation batches.
+
 \paragraph{Cross-run comparison.}
 \emph{(Placeholder for the markdown table produced by \texttt{compare\_runs.py},
 plus the overlay plot \texttt{runs\_comparison.png}.)}
-
-\paragraph{Discussion.}
-\emph{(Placeholder. Discuss: does balanced clustering close the gap between cluster
-sizes? Does multi-batch eval shift the early-stopping iteration? Is the F1/ARI gap
-narrower or wider with the new clustering?)}
 
 % ─────────────────────────────────────────────
 \section{Failure Modes}

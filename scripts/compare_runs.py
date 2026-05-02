@@ -28,6 +28,7 @@ def print_table(results):
     cols = [
         ('run',                 'Run'),
         ('beta',                'beta'),
+        ('lambda_same',         'l_same'),
         ('best_ari',            'Best ARI'),
         ('iter_at_best',        'Iter@best'),
         ('final_auroc',         'Final AUROC'),
