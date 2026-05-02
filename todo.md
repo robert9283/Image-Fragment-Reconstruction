@@ -1,24 +1,7 @@
 # Open work items
 
-- in the tex the section "Why Adjacency Prediction Helps" can be ommitted.
-- in section 5 "Architecture: Siamese Network" can you include a tikz picture depicting the architecture of the model in a schemadic way. Pleaase let the tikz picture live in a seperate tex file which is included.
-- please remove "Siamese Network" from the title
-- sectio 6.2 is not anymore needed. It can be shortend and included in the next section "Loss function"
--in section 6.3 of the loss function please also mention which value of the tilt parameter corresponds to the normal case where the weighted binary cross entropy correspinds to binary cross entropy
-- shorten the paragraph: "Why we lean toward a moderate-to-aggressive tilt. " to a few sentences. No seperate paragraph is necessary
-- in fig 1 "Figure 1: Schematic of the predicted similarity graph. " the two label text for the purple and orange node in the caption overlapp so that the text is cutoff.
-- in section 7 you write that p reflects the models probability. I think that is wrong it is just a measure of confidence.
-- in section 7 "From Pretext Task to Clustering" the two paragraph "Decision point: clustering on the graph. Spectral clustering" and "Balanced spectral clustering." can be merged since we do not use anymore spectral clustering by itself. Do not mention the libraries used in the text. You can add them into footnotes. Add the formula of spectral clustering and explain very briefly baanced spectral clustering. The paragraph "Metric consistency." can be removed.
-- the title "Evaluation Metric: Adjusted Rand Index" is a bit misleading since we have two task. You shoud specifiy that you mean the evaluation metric for the clustering of the image fragments. Please make that also in the section clear.
-- in section "Experimental Setup" the text "random_state = 42 insklearn.cluster.Spec
-KMeans, andSpectralEmbedding)" gets cutoff. Also I think this can be moved into a foot note.
-- i would like that file siamese_approach.tex gets renamed into something more meaningful. The siamese_approach is not so telling.
-- can you take the summary.tex out of the git but leave it in the folder so I wont publish this later accidedently
-- please also give a clean definition of ARI. Encapsulate the example you give for ARI and puri into an example block.
 - check consistency of document and also consistency with code
-- update section 14: further suggestions. Some of this stuff has been done already
-- in section 6.1 "Constructing Training Labels" i would like to have a tikz picture of a 4 times 4 grid of fragments.
-- i would like to have a script that extract me a few failure modes. That is a set of 10 pictures where the clustering didnt work very well. In the caption of the image we should write all the hyperparameters used so we dont confuse models easily.
+- In Fig 1 "Schematic of the model." you talk about probabilites. I think probability is the wrong word. That mistake you made at severak positions.
 
 ## Done
 
@@ -26,6 +9,29 @@ KMeans, andSpectralEmbedding)" gets cutoff. Also I think this can be moved into 
 - `n_neg / n_pos` is computed once from `(n_images, GRID)` in `main.n_neg_over_n_pos`
   and passed into the model as `pos_weight = beta * ratio`. Tilt parameter `beta`
   now exposed in `config.yaml` and propagated into `results.jsonl`.
+- Section "Why Adjacency Prediction Helps" omitted; content was redundant.
+- Architecture TikZ figure in section 5 (separate `fig_architecture.tex`).
+- "Siamese Network" removed from the title.
+- Section 6.2 (Class Imbalance) folded into 6.3 (Loss Function).
+- Plain-BCE special case ($\beta = 1/52$) explicitly mentioned in the loss section.
+- Recall-tilt paragraph shortened.
+- Figure 1 (similarity graph) legend overlap fixed.
+- Section 7: $p_{ij}$ described as a confidence score, not a calibrated probability.
+- Spectral-clustering paragraphs merged with formula; library names moved to footnote.
+- "Metric consistency" paragraph removed.
+- ARI section retitled "Evaluation Metric for the Clustering Task" with scope clarification.
+- ARI section: clean definition with $a/b/c/d$ pair counts; purity example in a quote block.
+- Random_state details moved to a footnote.
+- `approach_siamese.tex` renamed to `approach.tex`.
+- `summary.tex` and `summary.pdf` untracked from git, kept locally via `.gitignore`.
+- Further Suggestions section pruned: items already implemented are removed; new
+  forward-looking items added (differentiable ARI surrogate, pretrained encoder,
+  topology-aware clustering, color-histogram baseline).
+- 4x4 grid TikZ figure in section 6.1 (`fig_grid_labels.tex`).
+- Failure-modes script (`scripts/failure_modes.py`) auto-selecting the current
+  best checkpoint, with hyperparameters in the figure caption.
+- Failure-modes script wired into `debug/generate_report.sh` so the figure
+  is refreshed alongside the rest of the debug plots.
 
 ## Historical context (kept for the report)
 
