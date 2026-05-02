@@ -3,7 +3,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-for doc in summary approach_siamese; do
+for doc in summary approach; do
     pdflatex -interaction=nonstopmode ${doc}.tex
     biber ${doc}
     pdflatex -interaction=nonstopmode ${doc}.tex

@@ -153,9 +153,10 @@ def make_figure(images, fragments, labels, pred, pred_matched, run_summary, cfg)
 
 
 def write_tex(run_summary, cfg, n_misclassified, total):
+    safe_name = run_summary['run'].replace('_', r'\_')
     caption = (
         f"Selected misclassified fragments from the best checkpoint "
-        f"(\\texttt{{{run_summary['run']}}}, "
+        f"(\\texttt{{{safe_name}}}, "
         f"best ARI = {run_summary['best_ari']:.3f}, "
         f"$\\beta = {cfg.get('beta', 0.01923)}$, "
         f"$\\lambda_{{\\mathrm{{adj}}}} = {cfg.get('lambda_adj', 1.0)}$, "

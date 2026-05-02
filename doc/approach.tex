@@ -9,13 +9,12 @@
 \usepackage{booktabs}
 \usepackage[backend=biber, style=authoryear]{biblatex}
 \usepackage{tikz}
-\usetikzlibrary{positioning}
+\usetikzlibrary{positioning,arrows.meta,fit}
 
 \geometry{margin=2.5cm}
 \addbibresource{references.bib}
 
-\title{Image Fragment Reconstruction:\\
-A Siamese Network Approach via Adjacency Prediction}
+\title{Image Fragment Reconstruction via Adjacency Prediction}
 \author{}
 \date{\today}
 
@@ -131,30 +130,27 @@ This is self-supervised throughout: no labels beyond those derivable from the gr
 structure are ever used.
 
 % ─────────────────────────────────────────────
-\section{Why Adjacency Prediction Helps}
-% ─────────────────────────────────────────────
-
-The naive contrastive approach (Section 3 of the companion document) faces a fundamental
-tension: intra-image fragments can be visually dissimilar (a sky tile vs.\ a ground tile
-from the same photograph), while inter-image fragments can be visually similar (two sky
-tiles from different photographs). Adjacency prediction addresses this directly:
-
-\begin{itemize}
-    \item To predict whether two fragments are adjacent, the model must first determine
-          whether they could plausibly come from the same image at all — source identity
-          is a necessary precondition for adjacency.
-    \item Adjacency exploits \textbf{local edge continuity} — a signal that is
-          orthogonal to global visual similarity and therefore less susceptible to the
-          sky-tile problem.
-    \item The pretext task is harder than simple contrastive learning, which forces the
-          model to learn richer representations.
-\end{itemize}
-
-% ─────────────────────────────────────────────
 \section{Architecture: Siamese Network}
 % ─────────────────────────────────────────────
 
-The model consists of two components:
+The model is a Siamese network: a shared encoder is applied to each of two input
+fragments, and a comparison head turns the two embeddings into a binary
+prediction (Figure~\ref{fig:architecture}). When the multi-task loss is enabled,
+a second comparison head with the same structure is added for same-image
+prediction.
+
+\begin{figure}[h]
+\centering
+\input{fig_architecture.tex}
+\caption{Schematic of the model. The CNN encoder is applied with shared weights
+to each of two input fragments; its $256$-dimensional embeddings are combined into a
+single $1024$-dimensional vector via concatenation of difference, element-wise
+product, and the two embeddings themselves; this vector is fed to one or two
+comparison heads (adjacency, same-image) that produce binary predictions.}
+\label{fig:architecture}
+\end{figure}
+
+The components are:
 
 \paragraph{Shared CNN encoder.}
 A single convolutional neural network maps each 16$\times$16$\times$3 fragment to a
@@ -204,15 +200,18 @@ total number of pairs is:
 
 Each pair receives a binary label: $y_{ij} = 1$ if the two fragments are adjacent within
 the same image, $y_{ij} = 0$ otherwise. This label is derived entirely from the known
-grid positions and requires no human annotation.
+grid positions and requires no human annotation
+(Figure~\ref{fig:grid-labels}).
 
-\subsection{Class Imbalance}
-
-Adjacent pairs are rare relative to non-adjacent pairs. Within one image of 16 fragments
-there are 24 adjacent pairs and $\binom{16}{2} - 24 = 96$ non-adjacent same-image pairs,
-plus all cross-image pairs. Across the full 160-fragment sample the positive rate is low.
-This imbalance should be addressed via weighted loss or by subsampling negatives during
-training.
+\begin{figure}[h]
+\centering
+\input{fig_grid_labels.tex}
+\caption{Adjacency labelling within a single source image. Each of the 16
+fragments is connected by a red edge to each of its grid neighbours. The
+24 highlighted edges are the positive pairs ($y_{ij} = 1$); all other pairs
+within the image (96 of them) and across images are negative ($y_{ij} = 0$).}
+\label{fig:grid-labels}
+\end{figure}
 
 \subsection{Loss Function}
 
@@ -267,77 +266,101 @@ computational overhead is manageable.
 \section{From Pretext Task to Clustering}
 % ─────────────────────────────────────────────
 
-After training, the model produces a predicted probability $p_{ij}$ for every pair of
-fragments. These probabilities define a \textbf{fully connected weighted graph} over the
-160 fragments, where edge weight $w_{ij} = p_{ij}$ reflects the model's confidence that
-fragments $i$ and $j$ are adjacent — and by extension, that they originate from the same
-image (Figure~\ref{fig:similarity-graph}).
+After training, the model produces a value $p_{ij} \in [0, 1]$ for every pair of
+fragments. We do not interpret this as a calibrated probability --- the model is
+trained on a binary cross-entropy objective but its outputs are not guaranteed to
+be calibrated to true frequencies. We use $p_{ij}$ instead as a confidence score:
+the higher the value, the more confident the model is that fragments $i$ and $j$
+are adjacent. These scores define a \textbf{fully connected weighted graph} over
+the 160 fragments, where edge weight $w_{ij} = p_{ij}$ reflects the model's
+confidence that the two fragments are adjacent --- and by extension, that they
+originate from the same image (Figure~\ref{fig:similarity-graph}).
 
 \begin{figure}[h]
 \centering
 \input{fig_similarity_graph.tex}
 \caption{Schematic of the predicted similarity graph. Each node is a fragment; edge
-weight $p_{ij}$ is the model's predicted adjacency probability. Edges within a true
-source image (here, two illustrative source images shown in blue and orange) tend to
-have high probability; cross-image edges have low probability. Spectral clustering
-recovers the source-image partition by finding the cut that separates the
-densely-connected sub-graphs.}
+weight $p_{ij}$ is the model's confidence that the two fragments are adjacent.
+Edges within a true source image (here, two illustrative source images shown in blue
+and orange) tend to receive high weight; cross-image edges receive low weight.
+Spectral clustering recovers the source-image partition by finding the cut that
+separates the densely-connected sub-graphs.}
 \label{fig:similarity-graph}
 \end{figure}
 
-\paragraph{Decision point: clustering on the graph.}
-\textbf{Spectral clustering} is the natural choice for a weighted graph. It uses the
-eigenstructure of the graph Laplacian to find clusters that are internally
-well-connected and externally weakly connected. With $k = 10$ known clusters, the
-$k$ smallest eigenvectors of the Laplacian are used.
-
-This is more principled than applying $k$-means directly to embeddings, because the
-graph structure captures the full relational information between all fragment pairs
-rather than just the position of individual embeddings in space.
-
 \paragraph{Balanced spectral clustering.}
-The standard spectral algorithm ignores the fact that each true cluster contains
-exactly $G^2 = 16$ fragments, and can produce clusters of very unequal sizes. We
-enforce balance by computing the $k$-dimensional spectral embedding (leading
-eigenvectors of the normalised Laplacian via \texttt{sklearn.manifold.SpectralEmbedding})
-and then assigning fragments to clusters with a Hungarian algorithm: each cluster is
-expanded into $G^2$ slots, giving a $160 \times 160$ cost matrix on which
-\texttt{scipy.optimize.linear\_sum\_assignment} returns a one-to-one assignment that
-respects the per-cluster capacity. Centroids are then re-estimated and the assignment
-is iterated until convergence (typically a handful of iterations).
+\textbf{Spectral clustering} is the natural choice for a weighted graph. Given the
+$160 \times 160$ similarity matrix $W$ with $w_{ij} = p_{ij}$, define the diagonal
+degree matrix $D$ with $D_{ii} = \sum_j w_{ij}$ and the symmetric normalised graph
+Laplacian
+\[
+L_{\text{sym}} = I - D^{-1/2} W D^{-1/2}.
+\]
+The spectral embedding stacks the $k$ leading eigenvectors of $L_{\text{sym}}$ into a
+$160 \times k$ matrix; in the eigenspace, fragments belonging to densely-connected
+sub-graphs lie close together. The standard pipeline then runs $k$-means on this
+embedding to obtain hard cluster assignments.
 
-\paragraph{Metric consistency.}
-Unlike the contrastive approach, there is no distance metric to align between training
-and clustering — the edge weights are probabilities produced directly by the model, and
-spectral clustering operates on those weights natively.
+Plain $k$-means ignores the fact that each true cluster contains exactly $G^2 = 16$
+fragments and can produce groups of very unequal size. We enforce balance by replacing
+the $k$-means step with a balanced assignment: build a $160 \times (k \cdot G^2)$ cost
+matrix in which each cluster appears $G^2$ times, and solve the resulting linear
+assignment problem with the Hungarian algorithm\footnote{Implemented using
+\texttt{sklearn.manifold.SpectralEmbedding} for the eigendecomposition and
+\texttt{scipy.optimize.linear\_sum\_assignment} for the assignment.}. Cluster
+centroids are then re-estimated and the assignment iterated until convergence
+(typically a handful of iterations). The result is a partition of the 160 fragments
+into 10 clusters of size 16, by construction.
 
 % ─────────────────────────────────────────────
-\section{Evaluation Metric: Adjusted Rand Index}
+\section{Evaluation Metric for the Clustering Task}
 
-The primary evaluation metric is the \textbf{Adjusted Rand Index (ARI)}. It measures
-how well the predicted clusters match the true groupings by counting fragment pairs:
+The pretext task (adjacency prediction) and the downstream task (clustering of
+fragments by source image) are evaluated with different metrics. Adjacency
+prediction is evaluated with the threshold-free metrics AUROC and AUPRC (described
+below in the multi-batch averaging paragraph); the downstream clustering is
+evaluated with the \textbf{Adjusted Rand Index (ARI)}. We focus on the clustering
+metric here since it is the headline number for this work.
+
+\paragraph{Definition.}
+Let $\mathcal{C} = \{C_1, \dots, C_N\}$ be the true partition of the fragments
+into $N = 10$ source-image groups, and $\hat{\mathcal{C}} = \{\hat{C}_1, \dots,
+\hat{C}_N\}$ the partition predicted by the model. For each pair of fragments, look
+at whether the two are in the same true group and whether they are in the same
+predicted cluster:
 
 \begin{itemize}
-    \item A pair is a \textbf{true positive} if both fragments are in the same true group
-          and the same predicted cluster.
-    \item A pair is a \textbf{true negative} if they are in different true groups and
-          different predicted clusters.
-    \item All other pairs are errors.
+    \item $a$ = number of pairs in the same true group \emph{and} the same predicted cluster
+    \item $b$ = number of pairs in different true groups \emph{and} different predicted clusters
+    \item $c$ = number of pairs in the same true group but different predicted clusters
+    \item $d$ = number of pairs in different true groups but the same predicted cluster
 \end{itemize}
 
-The ``adjusted'' part corrects for chance — a random clustering would score
-$\text{ARI} = 0$, a perfect clustering scores $\text{ARI} = 1$, and a clustering
-worse than random can score below zero.
+The (unadjusted) Rand Index is the agreement rate $\text{RI} = (a + b) / (a + b + c + d)$.
+The Adjusted Rand Index normalises this against the expected RI under random labellings
+of fixed cluster sizes:
+\[
+\text{ARI} = \frac{\text{RI} - \mathbb{E}[\text{RI}]}{\max(\text{RI}) - \mathbb{E}[\text{RI}]}.
+\]
+A random clustering scores $\text{ARI} = 0$, a perfect one scores $\text{ARI} = 1$,
+and a clustering worse than random can score below zero.
 
-ARI is preferred over simpler metrics such as purity because purity only looks at the
-dominant class in each cluster and ignores how errors are distributed. For example, a
-cluster containing 60\% of fragments from image A and 40\% from image B scores the same
-purity as a cluster containing 60\% from image A, 20\% from image B, and 20\% from image
-C — despite the latter being more disordered. ARI captures this distinction.
+\paragraph{Why ARI rather than purity.}
+ARI is preferred over simpler metrics like purity because purity only looks at the
+dominant true class in each predicted cluster and ignores how the remaining errors
+are distributed.
+
+\begin{quote}\small
+\textbf{Example.} Suppose two predicted clusters each have $60\%$ fragments
+from image~A. The first additionally has $40\%$ from image~B; the second has $20\%$
+from B and $20\%$ from C. Both clusters score the same purity (0.60), even though
+the second is visibly more disordered. ARI distinguishes the two cases because it
+counts pair-level agreements rather than looking only at the plurality label.
+\end{quote}
 
 \textbf{NMI (Normalised Mutual Information)} is reported alongside ARI as a
-complementary metric. It measures how much information the predicted clusters share with
-the true groupings, normalised to $[0, 1]$.
+complementary metric. It measures how much information the predicted clusters share
+with the true groupings, normalised to $[0, 1]$.
 
 \paragraph{Multi-batch averaging.}
 Each evaluation step samples a fresh batch of 10 source images from the validation
@@ -375,12 +398,15 @@ A full training run completes in approximately 20--25 minutes on this hardware.
           into \texttt{runs/\{run\_name\}/}, and appends a one-line summary to
           \texttt{results.jsonl}. The configuration is therefore self-contained and
           re-runnable.
-    \item Random seeds are fixed for the clustering routines
-          (\texttt{random\_state = 42} in \texttt{sklearn.cluster.SpectralClustering},
-          \texttt{KMeans}, and \texttt{SpectralEmbedding}). The PyTorch random seed is
-          \emph{not} currently fixed, so model initialisation and the order of training
-          batches vary between runs; this is by design --- repeated runs with different
-          seeds give a sense of the variance in final ARI.
+    \item Random seeds are fixed for the clustering routines\footnote{%
+          \texttt{random\_state = 42} in
+          \texttt{sklearn.cluster.SpectralClustering},
+          \texttt{sklearn.cluster.KMeans}, and
+          \texttt{sklearn.manifold.SpectralEmbedding}.}.
+          The PyTorch random seed is \emph{not} currently fixed, so model
+          initialisation and the order of training batches vary between runs; this
+          is by design --- repeated runs with different seeds give a sense of the
+          variance in final ARI.
     \item Hyperparameters and run metadata are versioned in \texttt{config.yaml}.
 \end{itemize}
 
@@ -527,51 +553,37 @@ Evaluation metric & ARI, NMI & Purity \\
 \section{Further Suggestions}
 % ─────────────────────────────────────────────
 
-\paragraph{Multi-task loss combining adjacency and same-image prediction.}
-The current loss optimises only adjacency, which is sparse ($\sim$1.9\% positive pairs)
-and only indirectly aligned with the clustering task. A natural extension is to train
-two heads jointly:
+\paragraph{Differentiable surrogate for ARI.}
+The training loss is on adjacency (or same-image), not on the downstream clustering
+objective. A more direct alternative is to optimise a differentiable approximation of
+ARI: the eigendecomposition and cluster-assignment steps of spectral clustering can be
+relaxed via Sinkhorn iterations (as in SwAV) or via a MinCut-style differentiable graph
+pooling. This would couple the representation learning to the clustering objective
+explicitly. We did not pursue it because the multi-task same-image head already captures
+most of the pairwise structure that ARI ultimately depends on, at a fraction of the
+implementation cost.
 
-\[
-\mathcal{L} = \lambda_{\text{adj}} \cdot \text{BCE}_{\text{adjacency}}
-            + \lambda_{\text{same}} \cdot \text{BCE}_{\text{same-image}}
-\]
+\paragraph{Self-supervised pretrained encoder.}
+DINOv2 \parencite{moco2020} or another self-supervised image encoder could replace our
+trained-from-scratch CNN. Since these encoders use no labels, this stays within the
+constraints of the task. Whether the gain (richer features) outweighs the loss
+(features were trained at $224 \times 224$, not $16 \times 16$) is an open question.
 
-The same-image label $y^{\text{same}}_{ij} = \mathbb{1}[s(i) = s(j)]$ is also free
-(known from the grid construction), denser ($\sim$10\% positives), and directly
-matched to what the spectral clustering will use downstream. Adjacency provides the
-finer-grained, harder-to-learn signal; same-image prediction provides the dense
-task-aligned signal. Tuning $\lambda_{\text{adj}}$ and $\lambda_{\text{same}}$ would
-let us trade off between the two.
+\paragraph{Topology-aware clustering.}
+The true partition is more constrained than ``equal sizes'': each cluster's induced
+subgraph is isomorphic to a $G \times G$ grid (16 nodes, 24 edges, a planar graph with
+maximum degree 4). A clustering algorithm that exploited this structure, e.g.\ a small
+GNN trained to find equipartitions whose induced subgraphs are grid-like, could
+disambiguate borderline assignments that pure spectral clustering misses. Implementation
+cost is significant; the marginal benefit beyond what the model's already-strong soft
+signal recovers is unclear.
 
-\paragraph{Recall-tilted adjacency objective.}
-At inference time, spectral clustering does not need precise per-edge probabilities —
-it needs the overall connectivity structure of the graph to be correct. A few
-false-positive edges between same-image fragments are tolerable; missed adjacent edges
-weaken the connectivity within a true cluster. This argues for tilting the adjacency
-loss toward recall, e.g.\ via a higher positive-class weight, focal loss with
-$\alpha > 0.5$, or an asymmetric BCE in which false negatives are penalised more
-heavily than false positives. The current weighted BCE already partially does this;
-further increasing the positive weight is worth ablating.
-
-% ─────────────────────────────────────────────
-\section*{TODO}
-% ─────────────────────────────────────────────
-
-\begin{itemize}
-    \item \textbf{Limit model capacity} — a small CNN has less capacity to memorise than
-          a large one. Justify the chosen architecture size explicitly in the report.
-    \item \textbf{Color-histogram baseline} — implement a non-learned baseline
-          (per-fragment color histograms with chi-square or EMD distance, then
-          spectral clustering on the affinity matrix). This anchors the learned
-          model's ARI against a meaningful reference.
-\end{itemize}
-
-\paragraph{Already implemented.}
-Dropout ($p = 0.3$ after the encoder's projection layer), weight decay
-($\lambda = 10^{-4}$ in the Adam optimiser), balanced spectral clustering (Hungarian
-assignment with $G^2 = 16$ slots per cluster), and multi-batch averaged evaluation
-($n_{\text{eval}} = 20$) are all active in the current implementation.
+\paragraph{Color-histogram baseline.}
+A non-learned baseline using per-fragment color histograms with chi-square or EMD
+distance, followed by spectral clustering, would anchor the learned model's ARI against
+a meaningful reference. We expect this to be competitive on uniform-region fragments
+and weak on textured ones; a controlled comparison would quantify how much of the 0.57
+ARI comes from learned representation vs.\ trivial color matching.
 
 \printbibliography
 

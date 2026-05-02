@@ -46,22 +46,22 @@
 
 % --- legend ---
 \begin{scope}[shift={(0, -1.0)}]
-    \node[src1, scale=0.7] (lg1) at (0, 0) {};
-    \node[right=2pt of lg1, font=\footnotesize] {fragments from image A};
+    \node[src1, scale=0.6] (lg1) at (0, 0) {};
+    \node[anchor=west, font=\footnotesize] at (0.35, 0) {fragments from image A};
 
-    \node[src2, scale=0.7] (lg2) at (3.8, 0) {};
-    \node[right=2pt of lg2, font=\footnotesize] {fragments from image B};
+    \node[src2, scale=0.6] (lg2) at (4.6, 0) {};
+    \node[anchor=west, font=\footnotesize] at (4.95, 0) {fragments from image B};
 \end{scope}
 
 \begin{scope}[shift={(0, -1.7)}]
-    \draw[strong] (0, 0) -- (0.7, 0);
-    \node[right=2pt, font=\footnotesize] at (0.7, 0) {high $p_{ij}$};
+    \draw[strong] (0, 0) -- (0.6, 0);
+    \node[anchor=west, font=\footnotesize] at (0.7, 0) {high $p_{ij}$};
 
-    \draw[medium] (3.0, 0) -- (3.7, 0);
-    \node[right=2pt, font=\footnotesize] at (3.7, 0) {moderate $p_{ij}$};
+    \draw[medium] (2.4, 0) -- (3.0, 0);
+    \node[anchor=west, font=\footnotesize] at (3.1, 0) {moderate $p_{ij}$};
 
-    \draw[weak] (5.8, 0) -- (6.5, 0);
-    \node[right=2pt, font=\footnotesize] at (6.5, 0) {low $p_{ij}$};
+    \draw[weak] (5.2, 0) -- (5.8, 0);
+    \node[anchor=west, font=\footnotesize] at (5.9, 0) {low $p_{ij}$};
 \end{scope}
 
 \end{tikzpicture}

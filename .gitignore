@@ -13,3 +13,7 @@ runs/*/model.pt
 runs/*/training_log.jsonl
 runs/latest
 runs_comparison.png
+
+# private summary, kept locally but not committed
+doc/summary.tex
+doc/summary.pdf
