@@ -1,0 +1,1 @@
+{"run": "balanced_multibatch", "model": "fragment-adjacency-predictor", "best_ari": 0.5559, "iter_at_best": 8000, "final_f1": 0.346, "final_ari": 0.4606, "final_nmi": 0.6431, "duration_min": 19.6, "n_eval_batches": 20, "balanced_clustering": true, "notes": "balanced spectral clustering + multi-batch eval (n=20)"}

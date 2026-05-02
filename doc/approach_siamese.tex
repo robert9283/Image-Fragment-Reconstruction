@@ -76,6 +76,42 @@ Although labels are withheld, the following quantities are known and may be expl
 The third point is the key observation exploited by the proposed approach (Section~2).
 
 % ─────────────────────────────────────────────
+\section{Related Work}
+% ─────────────────────────────────────────────
+
+The problem sits at the intersection of self-supervised representation learning and
+clustering. We review three families of prior work that informed the approach.
+
+\paragraph{Pretext-task self-supervision.}
+The dominant paradigm in self-supervised vision until the rise of contrastive methods
+was to define a hand-crafted pretext task whose labels are derivable from the data
+itself. \textcite{noroozi2016} solve a jigsaw permutation: given a $3 \times 3$ grid
+of fragments shuffled by one of 100 fixed permutations, predict which permutation was
+used. The encoder learns features useful for downstream classification. Our adjacency
+prediction is a much simpler, binary variant of this idea --- rather than predicting
+a discrete permutation index over an exponentially large space, we predict a binary
+label per pair. This trades off representational richness for sample efficiency.
+
+\paragraph{Contrastive learning.}
+SimCLR \parencite{simclr2020} and MoCo \parencite{moco2020} learn representations by
+pulling together augmented views of the same image and pushing apart views of
+different images. In the present setting these methods are awkward: there is no
+natural positive pair construction, since the natural ``view'' of a fragment is the
+fragment itself. One could treat all fragments from one source image as positives
+of each other, but this requires the source label that we are explicitly forbidden
+to use during training. Adjacency labels, in contrast, are derivable from the grid
+structure alone.
+
+\paragraph{Clustering-based self-supervision.}
+DeepCluster \parencite{deepcluster2018} alternates between clustering current
+embeddings and using cluster assignments as pseudo-labels. SwAV
+\parencite{swav2020} extends this with online clustering and equipartitioned cluster
+assignments via the Sinkhorn algorithm. Both are conceptually well-suited to this
+task, but they introduce significant complexity (alternating training, prototype
+maintenance) for what is at heart a small-scale clustering problem with $N = 10$
+images. We treat this family as a strong candidate for follow-up work but defer it.
+
+% ─────────────────────────────────────────────
 \section{Core Idea}
 % ─────────────────────────────────────────────
 
@@ -183,8 +219,42 @@ training.
 Binary cross-entropy is the natural loss for a binary prediction task:
 
 \[
-\mathcal{L} = -\frac{1}{N}\sum_{(i,j)} \Bigl[ y_{ij} \log p_{ij} + (1 - y_{ij}) \log(1 - p_{ij}) \Bigr]
+\mathcal{L}_{\text{BCE}} = -\frac{1}{N}\sum_{(i,j)} \Bigl[ y_{ij} \log p_{ij} + (1 - y_{ij}) \log(1 - p_{ij}) \Bigr]
 \]
+
+Positive (adjacent) pairs are far rarer than negative pairs in this configuration.
+With 10 source images on a $4 \times 4$ grid, each image contributes
+$4 \cdot 3 + 3 \cdot 4 = 24$ adjacent pairs, giving $n_{+} = 240$ positives in
+total. The remaining pairs are negatives: $n_{-} = \binom{160}{2} - 240 = 12{,}480$.
+The ratio $n_{-}/n_{+} = 52$ is therefore a constant determined by the grid
+geometry, not a per-batch quantity. Vanilla BCE on this data is dominated by the
+negative class: the gradient is overwhelmingly driven by the loss on non-adjacent
+pairs, and the model has little incentive to identify the few adjacent ones. The
+standard remedy is to upweight the rare class. Since only the ratio of the two
+class weights matters, we parameterise the loss with a single \emph{tilt}
+parameter $\beta \geq 1$:
+\[
+\mathcal{L}_{\text{WBCE}}(\beta) = -\frac{1}{N}\sum_{(i,j)}
+    \Bigl[\, \beta \cdot \tfrac{n_{-}}{n_{+}}\, y_{ij} \log p_{ij}
+       + (1 - y_{ij}) \log(1 - p_{ij}) \,\Bigr].
+\]
+
+The textbook value is $\beta = 1$, the class-balanced loss: it equalises the
+total gradient contribution of the two classes, treating a single positive as
+worth 52 negatives. Setting $\beta > 1$ over-weights positives beyond this
+point --- a positive mistake is now \emph{more} costly than the natural class
+ratio implies. For our downstream task this is desirable, and we expect the
+optimum to lie at a moderate-to-aggressive tilt.
+
+\paragraph{Why we lean toward a moderate-to-aggressive tilt.}
+The downstream task is graph clustering, not per-edge classification. False
+negatives directly weaken intra-cluster connectivity, while false positives are
+only harmful when they connect fragments from \emph{different} source images ---
+a case the model rarely produces because cross-image fragments are visually
+dissimilar. Same-image false positives, the more common kind, actually reinforce
+the connectivity spectral clustering relies on. The error costs are therefore
+asymmetric in favour of recall, and we expect the optimal $\beta$ to lie above
+the class-balanced point.
 
 \subsection{Computational Cost}
 
@@ -278,6 +348,87 @@ $n_{\text{eval}} = 20$ fresh validation batches per evaluation step. This stabil
 the training curves and, crucially, the early-stopping decision and the
 checkpoint-selection criterion, which would otherwise be biased toward lucky batches.
 
+% ─────────────────────────────────────────────
+\section{Experimental Setup}
+% ─────────────────────────────────────────────
+
+\paragraph{Data.}
+ImageNet-64 \parencite{imagenet64}: a downsampled version of the ImageNet-1k
+classification dataset in which every image has been resized to $64 \times 64$
+pixels. The dataset is split into a training partition and a test partition; we draw
+the model's training images from the former and the validation images from the
+latter. Each training step samples 10 random images on the fly and produces a fresh
+batch of 160 fragments; the data generator is therefore effectively infinite. The
+augmentation pipeline (rotation up to $\pm 20^\circ$, horizontal/vertical shift up
+to 10\%, channel shift 0.2) is applied to the full image \emph{before} fragmentation
+and is provided by the dataset's data generator (\texttt{data.py}); it is not
+modified.
+
+\paragraph{Hardware.}
+All training and evaluation reported in this document was performed on a MacBook Air
+(Apple M-series CPU). PyTorch is configured to fall back to CPU; no GPU is required.
+A full training run completes in approximately 20--25 minutes on this hardware.
+
+\paragraph{Reproducibility.}
+\begin{itemize}
+    \item Each run writes its full configuration, training log, and best checkpoint
+          into \texttt{runs/\{run\_name\}/}, and appends a one-line summary to
+          \texttt{results.jsonl}. The configuration is therefore self-contained and
+          re-runnable.
+    \item Random seeds are fixed for the clustering routines
+          (\texttt{random\_state = 42} in \texttt{sklearn.cluster.SpectralClustering},
+          \texttt{KMeans}, and \texttt{SpectralEmbedding}). The PyTorch random seed is
+          \emph{not} currently fixed, so model initialisation and the order of training
+          batches vary between runs; this is by design --- repeated runs with different
+          seeds give a sense of the variance in final ARI.
+    \item Hyperparameters and run metadata are versioned in \texttt{config.yaml}.
+\end{itemize}
+
+\paragraph{Hyperparameters.}
+The complete list of hyperparameters is maintained in \texttt{config.yaml} and may
+still change in the course of further ablations. The current values are documented
+there; this section will be replaced with a final hyperparameter table once the
+study is complete.
+
+% ─────────────────────────────────────────────
+\section{Results}
+% ─────────────────────────────────────────────
+
+\emph{This section contains placeholders. Numbers are filled in once each run
+finishes; \texttt{scripts/compare\_runs.py} renders the comparison table from
+\texttt{results.jsonl}.}
+
+\paragraph{Headline numbers.}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+                            & \textbf{Best ARI}            & \textbf{Adjacency F1} \\
+\midrule
+Run 1 (single-batch eval, unbalanced)  & $0.787$           & $0.263$               \\
+Run 2 (multi-batch eval, balanced)     & \emph{TBD}        & \emph{TBD}            \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Cross-run comparison.}
+\emph{(Placeholder for the markdown table produced by \texttt{compare\_runs.py},
+plus the overlay plot \texttt{runs\_comparison.png}.)}
+
+\paragraph{Discussion.}
+\emph{(Placeholder. Discuss: does balanced clustering close the gap between cluster
+sizes? Does multi-batch eval shift the early-stopping iteration? Is the F1/ARI gap
+narrower or wider with the new clustering?)}
+
+% ─────────────────────────────────────────────
+\section{Failure Modes}
+% ─────────────────────────────────────────────
+
+\emph{Placeholder section. To be filled with concrete examples of fragments the
+model cannot distinguish (e.g.\ near-uniform sky tiles, blurred patches, fragments
+with no informative texture) and an estimate of the empirical ceiling on ARI imposed
+by these intrinsically ambiguous cases.}
+
+% ─────────────────────────────────────────────
 \section{Decision Points Summary}
 % ─────────────────────────────────────────────
 

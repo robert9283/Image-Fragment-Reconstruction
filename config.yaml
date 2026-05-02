@@ -3,8 +3,8 @@ data_path: to_share/data
 model: fragment-adjacency-predictor
 
 # run identification (omit run_name to auto-generate from timestamp)
-run_name:                   # e.g. "baseline", "balanced", "multitask_lambda05"
-notes: ""                   # short description of this run, written into results.jsonl
+run_name: balanced_multibatch
+notes: "balanced spectral clustering + multi-batch eval (n=20)"
 
 n_images: 10
 max_iterations: 25000
