@@ -54,7 +54,14 @@ class ComparisonHead(nn.Module):
 
 class FragmentAdjacencyPredictor(BaseModel):
 
-    def __init__(self, embedding_dim=256, dropout=0.3, lr=1e-3, weight_decay=1e-4):
+    def __init__(self, embedding_dim=256, dropout=0.3, lr=1e-3, weight_decay=1e-4,
+                 pos_weight=52.0):
+        """
+        pos_weight: per-positive class weight in the WBCE loss. The natural
+            class-balanced value is n_neg / n_pos = 52 for our 10-image, 4x4
+            grid configuration. Multiply by a tilt parameter beta > 1 to push
+            toward higher recall.
+        """
         self.device  = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.encoder = CNNEncoder(embedding_dim, dropout).to(self.device)
         self.head    = ComparisonHead(embedding_dim).to(self.device)
@@ -63,7 +70,8 @@ class FragmentAdjacencyPredictor(BaseModel):
             lr=lr,
             weight_decay=weight_decay,
         )
-        self.loss_fn = nn.BCELoss()
+        self.loss_fn   = nn.BCELoss(reduction='none')
+        self.pos_weight = pos_weight
 
     def _to_tensor(self, fragments):
         x = torch.tensor(fragments, dtype=torch.float32)
@@ -90,13 +98,14 @@ class FragmentAdjacencyPredictor(BaseModel):
             device=self.device,
         )
 
-        # weighted loss to handle class imbalance (few positives vs many negatives)
-        n_pos = targets.sum().item()
-        n_neg = len(targets) - n_pos
+        # weighted BCE: positives get weight self.pos_weight, negatives get weight 1.
+        # the per-pair losses are reduced AFTER the weight is applied (reduction='none'
+        # in self.loss_fn), so the weighting is actually effective.
         weight = torch.where(targets == 1,
-                             torch.tensor(n_neg / (n_pos + 1e-6), device=self.device),
-                             torch.ones(len(targets), device=self.device))
-        loss = (self.loss_fn(preds, targets) * weight).mean()
+                             torch.tensor(self.pos_weight, device=self.device),
+                             torch.ones((), device=self.device))
+        per_pair_losses = self.loss_fn(preds, targets)
+        loss = (per_pair_losses * weight).mean()
 
         self.optimizer.zero_grad()
         loss.backward()

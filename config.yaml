@@ -11,6 +11,9 @@ max_iterations: 25000
 eval_every: 250
 patience: 10
 
+# loss
+beta: 1.0                   # tilt parameter for WBCE: w_+ = beta * (n_-/n_+) = beta * 52
+
 # evaluation
 n_eval_batches: 20          # average ARI/F1 over this many fresh validation batches
 balanced_clustering: true   # enforce exactly 16 fragments per cluster

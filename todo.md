@@ -1,8 +1,15 @@
 # Open work items
 
-## Bugs
+## Done
 
-### Weighted BCE is not actually weighted
+- Weighted BCE bug fixed (`BCELoss(reduction='none')`, then weight, then mean).
+- `n_neg / n_pos` is computed once from `(n_images, GRID)` in `main.n_neg_over_n_pos`
+  and passed into the model as `pos_weight = beta * ratio`. Tilt parameter `beta`
+  now exposed in `config.yaml` and propagated into `results.jsonl`.
+
+## Historical context (kept for the report)
+
+### Weighted BCE was not actually weighted
 **File:** `src/fragment_adjacency_predictor.py`, around line 99.
 
 Current code:

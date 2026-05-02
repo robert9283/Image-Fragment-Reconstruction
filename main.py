@@ -21,10 +21,21 @@ def load_config(path='config.yaml'):
         return yaml.safe_load(f)
 
 
-def load_model(name):
+def n_neg_over_n_pos(n_images, grid):
+    """Constant ratio of non-adjacent to adjacent pairs for the given grid."""
+    n_pos = n_images * (2 * grid * (grid - 1))   # horizontal + vertical adjacencies
+    n_pairs = (n_images * grid * grid) * (n_images * grid * grid - 1) // 2
+    n_neg = n_pairs - n_pos
+    return n_neg / n_pos
+
+
+def load_model(name, cfg):
     if name == 'fragment-adjacency-predictor':
         from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
-        return FragmentAdjacencyPredictor()
+        from src.fragments import GRID
+        beta = float(cfg.get('beta', 1.0))
+        ratio = n_neg_over_n_pos(cfg['n_images'], GRID)
+        return FragmentAdjacencyPredictor(pos_weight=beta * ratio)
     # TODO: add further models here
     else:
         raise ValueError(f"Unknown model: '{name}'")
@@ -59,6 +70,7 @@ def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, lo
     summary = {
         'run':           run_name,
         'model':         cfg.get('model'),
+        'beta':          cfg.get('beta', 1.0),
         'best_ari':      round(best_ari, 4),
         'iter_at_best':  best_iter,
         'final_f1':      last.get('f1'),
@@ -84,7 +96,7 @@ def main():
     train_gen = dataset.datagen_cls(batch_size=cfg['n_images'], ds='train', augmentation=True)
     val_gen   = dataset.datagen_cls(batch_size=cfg['n_images'], ds='test',  augmentation=False)
 
-    model = load_model(cfg['model'])
+    model = load_model(cfg['model'], cfg)
 
     log_path        = os.path.join(run_dir, 'training_log.jsonl')
     checkpoint_path = os.path.join(run_dir, 'model')
