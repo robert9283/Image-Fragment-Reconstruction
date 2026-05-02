@@ -7,7 +7,7 @@ import time
 import yaml
 import numpy as np
 from data import Imagenet64
-from src.fragments import extract_fragments, build_adjacency
+from src.fragments import extract_fragments, build_adjacency, GRID
 from src.clustering import cluster, compute_metrics
 
 
@@ -52,13 +52,23 @@ def main():
         train_time_acc += time.time() - t0
 
         if (iteration + 1) % cfg['eval_every'] == 0:
-            val_images, _ = next(val_gen)
-            val_fragments, val_labels = extract_fragments(np.array(val_images))
-            val_adjacency = build_adjacency(n_images=cfg['n_images'])
+            n_eval = cfg.get('n_eval_batches', 1)
+            n_per_cluster = GRID * GRID if cfg.get('balanced_clustering', False) else None
 
-            t0          = time.time()
-            adj_metrics = model.evaluate_adjacency(val_fragments, val_adjacency)
-            cl_metrics  = compute_metrics(cluster(model.get_output(val_fragments)), val_labels)
+            t0 = time.time()
+            adj_acc = {'precision': [], 'recall': [], 'f1': []}
+            cl_acc  = {'ari': [], 'nmi': [], 'purity': []}
+            for _ in range(n_eval):
+                val_images, _ = next(val_gen)
+                val_fragments, val_labels = extract_fragments(np.array(val_images))
+                val_adjacency = build_adjacency(n_images=cfg['n_images'])
+                a = model.evaluate_adjacency(val_fragments, val_adjacency)
+                c = compute_metrics(cluster(model.get_output(val_fragments),
+                                            n_per_cluster=n_per_cluster), val_labels)
+                for k in adj_acc: adj_acc[k].append(a[k])
+                for k in cl_acc:  cl_acc[k].append(c[k])
+            adj_metrics = {k: float(np.mean(v)) for k, v in adj_acc.items()}
+            cl_metrics  = {k: float(np.mean(v)) for k, v in cl_acc.items()}
             eval_time   = time.time() - t0
 
             improved = cl_metrics['ari'] > best_ari

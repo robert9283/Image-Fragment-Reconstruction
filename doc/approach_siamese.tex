@@ -8,6 +8,8 @@
 \usepackage{amssymb}
 \usepackage{booktabs}
 \usepackage[backend=biber, style=authoryear]{biblatex}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
 
 \geometry{margin=2.5cm}
 \addbibresource{references.bib}
@@ -199,7 +201,19 @@ After training, the model produces a predicted probability $p_{ij}$ for every pa
 fragments. These probabilities define a \textbf{fully connected weighted graph} over the
 160 fragments, where edge weight $w_{ij} = p_{ij}$ reflects the model's confidence that
 fragments $i$ and $j$ are adjacent — and by extension, that they originate from the same
-image.
+image (Figure~\ref{fig:similarity-graph}).
+
+\begin{figure}[h]
+\centering
+\input{fig_similarity_graph.tex}
+\caption{Schematic of the predicted similarity graph. Each node is a fragment; edge
+weight $p_{ij}$ is the model's predicted adjacency probability. Edges within a true
+source image (here, two illustrative source images shown in blue and orange) tend to
+have high probability; cross-image edges have low probability. Spectral clustering
+recovers the source-image partition by finding the cut that separates the
+densely-connected sub-graphs.}
+\label{fig:similarity-graph}
+\end{figure}
 
 \paragraph{Decision point: clustering on the graph.}
 \textbf{Spectral clustering} is the natural choice for a weighted graph. It uses the
@@ -210,6 +224,17 @@ $k$ smallest eigenvectors of the Laplacian are used.
 This is more principled than applying $k$-means directly to embeddings, because the
 graph structure captures the full relational information between all fragment pairs
 rather than just the position of individual embeddings in space.
+
+\paragraph{Balanced spectral clustering.}
+The standard spectral algorithm ignores the fact that each true cluster contains
+exactly $G^2 = 16$ fragments, and can produce clusters of very unequal sizes. We
+enforce balance by computing the $k$-dimensional spectral embedding (leading
+eigenvectors of the normalised Laplacian via \texttt{sklearn.manifold.SpectralEmbedding})
+and then assigning fragments to clusters with a Hungarian algorithm: each cluster is
+expanded into $G^2$ slots, giving a $160 \times 160$ cost matrix on which
+\texttt{scipy.optimize.linear\_sum\_assignment} returns a one-to-one assignment that
+respects the per-cluster capacity. Centroids are then re-estimated and the assignment
+is iterated until convergence (typically a handful of iterations).
 
 \paragraph{Metric consistency.}
 Unlike the contrastive approach, there is no distance metric to align between training
@@ -244,6 +269,15 @@ C — despite the latter being more disordered. ARI captures this distinction.
 complementary metric. It measures how much information the predicted clusters share with
 the true groupings, normalised to $[0, 1]$.
 
+\paragraph{Multi-batch averaging.}
+Each evaluation step samples a fresh batch of 10 source images from the validation
+generator. Because individual batches vary substantially in difficulty (some draws of
+10 ImageNet classes are visually well-separated, others contain near-duplicates), a
+single-batch ARI estimate has high variance. We average each metric over
+$n_{\text{eval}} = 20$ fresh validation batches per evaluation step. This stabilises
+the training curves and, crucially, the early-stopping decision and the
+checkpoint-selection criterion, which would otherwise be biased toward lucky batches.
+
 \section{Decision Points Summary}
 % ─────────────────────────────────────────────
 
@@ -257,8 +291,10 @@ Architecture & Siamese CNN + MLP head & Single encoder \\
 Embedding combination & Diff $+$ product $+$ both embeddings & Concatenation only \\
 Loss function & Binary cross-entropy & Focal loss (for imbalance) \\
 Class imbalance & Weighted loss or negative subsampling & None \\
-Clustering algorithm & Spectral clustering & $k$-means on embeddings \\
+Clustering algorithm & Balanced spectral clustering & Plain spectral, $k$-means \\
 Number of clusters & $k = 10$ (known) & Discovered automatically \\
+Cluster size & Enforced ($G^2 = 16$) via Hungarian & Free \\
+Eval batches per step & 20 (averaged) & 1 (single batch) \\
 Evaluation metric & ARI, NMI & Purity \\
 \bottomrule
 \end{tabular}
@@ -312,27 +348,6 @@ $\alpha > 0.5$, or an asymmetric BCE in which false negatives are penalised more
 heavily than false positives. The current weighted BCE already partially does this;
 further increasing the positive weight is worth ablating.
 
-\paragraph{Balanced spectral clustering.}
-Each source image always contributes exactly $G^2 = 16$ fragments, so the true
-clusters are perfectly balanced. Sklearn's \texttt{SpectralClustering} ignores this
-and can produce clusters of size 5 and 30. Two practical ways to enforce balance:
-
-\begin{enumerate}
-    \item \textbf{Spectral embedding $+$ balanced $k$-means.} Compute the spectral
-          embedding as usual ($k$ leading eigenvectors of the normalised Laplacian),
-          then cluster the embedding with a balanced $k$-means variant (e.g.\
-          \texttt{k-means-constrained} on PyPI, which solves a min-cost flow
-          problem to enforce equal cluster sizes). This is a one-line replacement
-          for the final clustering step.
-    \item \textbf{Optimal-transport assignment.} Compute the spectral embedding,
-          choose 10 cluster centroids (e.g.\ via $k$-means), then solve a balanced
-          assignment problem (Sinkhorn or Hungarian on a $160 \times 10$ cost
-          matrix with capacity 16 per cluster) to assign each fragment to a cluster
-          while respecting capacity.
-\end{enumerate}
-
-Approach (1) is the lower-effort option and likely sufficient.
-
 % ─────────────────────────────────────────────
 \section*{TODO}
 % ─────────────────────────────────────────────
@@ -340,20 +355,17 @@ Approach (1) is the lower-effort option and likely sufficient.
 \begin{itemize}
     \item \textbf{Limit model capacity} — a small CNN has less capacity to memorise than
           a large one. Justify the chosen architecture size explicitly in the report.
-    \item \textbf{Average ARI / F1 over many validation batches.} The current
-          evaluation uses a single fresh batch of 10 images per eval step, producing
-          high variance in the reported metrics. This affects (i) the readability of
-          training curves, (ii) early-stopping decisions, and (iii) the saved
-          checkpoint, which is selected on best single-batch ARI. Averaging over
-          20--30 fresh validation batches per eval step would reduce all three issues
-          at the cost of a small constant factor in eval time. Expose the number of
-          validation batches as a config parameter.
+    \item \textbf{Color-histogram baseline} — implement a non-learned baseline
+          (per-fragment color histograms with chi-square or EMD distance, then
+          spectral clustering on the affinity matrix). This anchors the learned
+          model's ARI against a meaningful reference.
 \end{itemize}
 
 \paragraph{Already implemented.}
-Dropout ($p = 0.3$ after the encoder's projection layer) and weight decay
-($\lambda = 10^{-4}$ in the Adam optimiser) are already active in the current
-implementation.
+Dropout ($p = 0.3$ after the encoder's projection layer), weight decay
+($\lambda = 10^{-4}$ in the Adam optimiser), balanced spectral clustering (Hungarian
+assignment with $G^2 = 16$ slots per cluster), and multi-batch averaged evaluation
+($n_{\text{eval}} = 20$) are all active in the current implementation.
 
 \printbibliography
 
