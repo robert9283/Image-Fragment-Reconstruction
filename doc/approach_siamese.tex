@@ -24,6 +24,56 @@ A Siamese Network Approach via Adjacency Prediction}
 \newpage
 
 % ─────────────────────────────────────────────
+\section{Problem Statement}
+% ─────────────────────────────────────────────
+
+Let $\mathcal{I} = \{I_1, \dots, I_N\}$ be a set of $N$ source images, each of spatial
+resolution $H \times W \times 3$. Each image is divided into a regular $G \times G$ grid
+of non-overlapping fragments of size $\frac{H}{G} \times \frac{W}{G} \times 3$, yielding
+$G^2$ fragments per image and $M = N \cdot G^2$ fragments in total. In the experimental
+setting used here $N = 10$, $H = W = 64$, $G = 4$, giving fragments of size
+$16 \times 16 \times 3$ and $M = 160$ fragments per batch.
+
+Let $f_k \in \mathbb{R}^{16 \times 16 \times 3}$ denote fragment $k$, and let
+$s(k) \in \{1, \dots, N\}$ be its source image. The fragments from all $N$ images are
+pooled into a single unordered collection. The task is:
+
+\begin{quote}
+\textit{Given the pooled collection of $M$ fragments with no positional or source
+information, assign each fragment to one of $N$ groups such that all fragments assigned
+to the same group originate from the same source image.}
+\end{quote}
+
+Formally, the goal is to recover a partition $\hat{\mathcal{C}} = \{\hat{C}_1, \dots,
+\hat{C}_N\}$ of $\{1, \dots, M\}$ such that for each predicted cluster $\hat{C}_n$ there
+exists a source image $I_{s}$ with $s(k) = s$ for all $k \in \hat{C}_n$.
+
+\paragraph{Constraints.}
+Two constraints make this non-trivial:
+
+\begin{enumerate}
+    \item \textbf{No positional information.} The original grid coordinates of each
+          fragment are not provided at inference time. The model may not use absolute
+          position as a feature.
+    \item \textbf{No labels during training.} The source identity $s(k)$ is never
+          provided to the model as a supervisory signal. The model must learn from
+          structural properties of the fragments themselves.
+\end{enumerate}
+
+\paragraph{Known structure.}
+Although labels are withheld, the following quantities are known and may be exploited:
+\begin{itemize}
+    \item The total number of source images $N = 10$ (so $k = N$ clusters are sought).
+    \item Each source image contributes exactly $G^2 = 16$ fragments, so all clusters
+          have equal size.
+    \item Spatial adjacency within a source image is fully determined by the grid
+          structure and can be derived without labels: fragments at grid positions
+          $(r, c)$ and $(r', c')$ are adjacent if and only if $|r - r'| + |c - c'| = 1$.
+\end{itemize}
+
+The third point is the key observation exploited by the proposed approach (Section~2).
+
+% ─────────────────────────────────────────────
 \section{Core Idea}
 % ─────────────────────────────────────────────
 
@@ -70,25 +120,35 @@ The model consists of two components:
 
 \paragraph{Shared CNN encoder.}
 A single convolutional neural network maps each 16$\times$16$\times$3 fragment to a
-fixed-dimensional embedding vector. The encoder is \textbf{shared} — the same weights
-are used for both fragments in a pair. This is the defining property of a Siamese
-network \parencite{siamese1994}: weight sharing ensures that the comparison is symmetric
-and that the encoder learns a universal fragment representation rather than one tuned to
-a specific input slot.
+256-dimensional embedding vector. The architecture is three convolutional blocks
+(Conv--BatchNorm--ReLU), with max-pooling after blocks two and three, reducing the
+spatial dimensions from $16\times16$ to $4\times4$. The flattened $4\times4\times128$
+feature map is projected to a 256-dimensional embedding via a linear layer followed by
+ReLU and dropout ($p=0.3$).
+
+The encoder is \textbf{shared} — the same weights are used for both fragments in a pair.
+This is the defining property of a Siamese network \parencite{siamese1994}: weight
+sharing ensures that the comparison is symmetric and that the encoder learns a universal
+fragment representation rather than one tuned to a specific input slot.
 
 \paragraph{Comparison head (MLP).}
-A small multi-layer perceptron (a fully connected network with one or two hidden layers)
-takes as input the two embeddings — concatenated, or combined via their difference or
-element-wise product — and outputs a single scalar in $[0, 1]$: the predicted
-probability that the two fragments are spatially adjacent.
-
-The full forward pass for a pair $(f_i, f_j)$ is:
+A small multi-layer perceptron takes as input a 1024-dimensional vector formed by
+concatenating four interaction terms between the two embeddings $\mathbf{a} =
+\text{CNN}(f_i)$ and $\mathbf{b} = \text{CNN}(f_j)$:
 
 \[
-p_{ij} = \text{MLP}\bigl(\text{CNN}(f_i) \,\|\, \text{CNN}(f_j)\bigr)
+\mathbf{z}_{ij} = \bigl[\mathbf{a} - \mathbf{b} \;\|\; \mathbf{a} \odot \mathbf{b} \;\|\; \mathbf{a} \;\|\; \mathbf{b}\bigr] \in \mathbb{R}^{1024}
 \]
 
-where $\|$ denotes concatenation.
+The difference $\mathbf{a} - \mathbf{b}$ captures asymmetric discrepancies; the
+element-wise product $\mathbf{a} \odot \mathbf{b}$ captures feature co-activation; and
+including both raw embeddings preserves their individual information. The MLP maps
+$\mathbf{z}_{ij}$ through a hidden layer of size 128 (ReLU) to a single scalar in
+$[0, 1]$:
+
+\[
+p_{ij} = \sigma\!\bigl(W_2\,\text{ReLU}(W_1\,\mathbf{z}_{ij} + b_1) + b_2\bigr)
+\]
 
 % ─────────────────────────────────────────────
 \section{Training}
@@ -194,7 +254,7 @@ the true groupings, normalised to $[0, 1]$.
 \midrule
 Training objective & Adjacency prediction (pretext task) & Contrastive loss \\
 Architecture & Siamese CNN + MLP head & Single encoder \\
-Embedding combination & Concatenation & Difference, element-wise product \\
+Embedding combination & Diff $+$ product $+$ both embeddings & Concatenation only \\
 Loss function & Binary cross-entropy & Focal loss (for imbalance) \\
 Class imbalance & Weighted loss or negative subsampling & None \\
 Clustering algorithm & Spectral clustering & $k$-means on embeddings \\
@@ -209,35 +269,91 @@ Evaluation metric & ARI, NMI & Purity \\
 % ─────────────────────────────────────────────
 
 \begin{itemize}
-    \item The augmentation in \texttt{data.py} applies rotation and shift to the full
-          image before cutting. This distorts the boundaries between fragments, weakening
-          the edge continuity signal that adjacency prediction relies on.
     \item Adjacency is a local signal — it says nothing directly about fragments that are
           far apart within the same image. The model must generalise from local adjacency
           to global source identity.
     \item The graph has 12,720 edges. For larger grids or larger samples this grows
           quadratically and may become a bottleneck.
+    \item The pretext metric and the task metric are misaligned. We train binary
+          adjacency (only $\sim$1.9\% positives) but evaluate clustering. The model can
+          achieve a useful similarity matrix (ARI $\approx 0.78$) while only mediocre
+          on adjacency F1 ($\approx 0.26$), because adjacency is a sufficient but not
+          necessary condition for same-source identity.
 \end{itemize}
+
+% ─────────────────────────────────────────────
+\section{Further Suggestions}
+% ─────────────────────────────────────────────
+
+\paragraph{Multi-task loss combining adjacency and same-image prediction.}
+The current loss optimises only adjacency, which is sparse ($\sim$1.9\% positive pairs)
+and only indirectly aligned with the clustering task. A natural extension is to train
+two heads jointly:
+
+\[
+\mathcal{L} = \lambda_{\text{adj}} \cdot \text{BCE}_{\text{adjacency}}
+            + \lambda_{\text{same}} \cdot \text{BCE}_{\text{same-image}}
+\]
+
+The same-image label $y^{\text{same}}_{ij} = \mathbb{1}[s(i) = s(j)]$ is also free
+(known from the grid construction), denser ($\sim$10\% positives), and directly
+matched to what the spectral clustering will use downstream. Adjacency provides the
+finer-grained, harder-to-learn signal; same-image prediction provides the dense
+task-aligned signal. Tuning $\lambda_{\text{adj}}$ and $\lambda_{\text{same}}$ would
+let us trade off between the two.
+
+\paragraph{Recall-tilted adjacency objective.}
+At inference time, spectral clustering does not need precise per-edge probabilities —
+it needs the overall connectivity structure of the graph to be correct. A few
+false-positive edges between same-image fragments are tolerable; missed adjacent edges
+weaken the connectivity within a true cluster. This argues for tilting the adjacency
+loss toward recall, e.g.\ via a higher positive-class weight, focal loss with
+$\alpha > 0.5$, or an asymmetric BCE in which false negatives are penalised more
+heavily than false positives. The current weighted BCE already partially does this;
+further increasing the positive weight is worth ablating.
+
+\paragraph{Balanced spectral clustering.}
+Each source image always contributes exactly $G^2 = 16$ fragments, so the true
+clusters are perfectly balanced. Sklearn's \texttt{SpectralClustering} ignores this
+and can produce clusters of size 5 and 30. Two practical ways to enforce balance:
+
+\begin{enumerate}
+    \item \textbf{Spectral embedding $+$ balanced $k$-means.} Compute the spectral
+          embedding as usual ($k$ leading eigenvectors of the normalised Laplacian),
+          then cluster the embedding with a balanced $k$-means variant (e.g.\
+          \texttt{k-means-constrained} on PyPI, which solves a min-cost flow
+          problem to enforce equal cluster sizes). This is a one-line replacement
+          for the final clustering step.
+    \item \textbf{Optimal-transport assignment.} Compute the spectral embedding,
+          choose 10 cluster centroids (e.g.\ via $k$-means), then solve a balanced
+          assignment problem (Sinkhorn or Hungarian on a $160 \times 10$ cost
+          matrix with capacity 16 per cluster) to assign each fragment to a cluster
+          while respecting capacity.
+\end{enumerate}
+
+Approach (1) is the lower-effort option and likely sufficient.
 
 % ─────────────────────────────────────────────
 \section*{TODO}
 % ─────────────────────────────────────────────
 
 \begin{itemize}
-    \item \textbf{Dropout} — randomly disable neurons during training to prevent the
-          model from relying on memorised patterns. Add as a hyperparameter in
-          \texttt{config.yaml}.
-    \item \textbf{Weight decay} — penalise large weights via L2 regularisation,
-          discouraging memorisation. Expose as a hyperparameter in \texttt{config.yaml}.
     \item \textbf{Limit model capacity} — a small CNN has less capacity to memorise than
           a large one. Justify the chosen architecture size explicitly in the report.
-    \item \textbf{Balanced spectral clustering} — the current spectral clustering
-          implementation does not enforce equal cluster sizes. Since each source image
-          always produces exactly 16 fragments, the true clusters are perfectly balanced.
-          Constraining the clustering to produce balanced clusters of 16 would reduce
-          ambiguity and likely improve ARI. This requires a balanced variant of spectral
-          clustering or a post-processing step that reassigns fragments to enforce balance.
+    \item \textbf{Average ARI / F1 over many validation batches.} The current
+          evaluation uses a single fresh batch of 10 images per eval step, producing
+          high variance in the reported metrics. This affects (i) the readability of
+          training curves, (ii) early-stopping decisions, and (iii) the saved
+          checkpoint, which is selected on best single-batch ARI. Averaging over
+          20--30 fresh validation batches per eval step would reduce all three issues
+          at the cost of a small constant factor in eval time. Expose the number of
+          validation batches as a config parameter.
 \end{itemize}
+
+\paragraph{Already implemented.}
+Dropout ($p = 0.3$ after the encoder's projection layer) and weight decay
+($\lambda = 10^{-4}$ in the Adam optimiser) are already active in the current
+implementation.
 
 \printbibliography
 
