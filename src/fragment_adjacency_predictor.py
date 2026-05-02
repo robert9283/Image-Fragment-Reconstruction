@@ -136,11 +136,18 @@ class FragmentAdjacencyPredictor(BaseModel):
 
     def evaluate_adjacency(self, fragments, adjacency):
         """
-        Computes precision, recall and F1 for the adjacency prediction task.
+        Threshold-independent adjacency metrics: AUROC and AUPRC. Both consume
+        the predicted probabilities directly, no cutoff is required.
+
+        AUPRC (average precision) is the more meaningful number on this
+        imbalanced setting (~1.9% positives); AUROC is reported alongside as
+        a sanity check.
+
         fragments:  (N, 16, 16, 3)
         adjacency:  (N, N) binary ground truth adjacency matrix
-        Returns dict with precision, recall, f1.
+        Returns dict with auroc, auprc.
         """
+        from sklearn.metrics import roc_auc_score, average_precision_score
         self.encoder.eval()
         self.head.eval()
 
@@ -152,17 +159,11 @@ class FragmentAdjacencyPredictor(BaseModel):
             probs = self.head(embeddings[idx_i], embeddings[idx_j]).cpu().numpy()
 
         targets = adjacency[idx_i.cpu(), idx_j.cpu()]
-        preds   = (probs >= 0.5).astype(int)
 
-        tp = ((preds == 1) & (targets == 1)).sum()
-        fp = ((preds == 1) & (targets == 0)).sum()
-        fn = ((preds == 0) & (targets == 1)).sum()
-
-        precision = tp / (tp + fp + 1e-8)
-        recall    = tp / (tp + fn + 1e-8)
-        f1        = 2 * precision * recall / (precision + recall + 1e-8)
-
-        return {'precision': float(precision), 'recall': float(recall), 'f1': float(f1)}
+        return {
+            'auroc': float(roc_auc_score(targets, probs)),
+            'auprc': float(average_precision_score(targets, probs)),
+        }
 
     def save(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)

@@ -73,7 +73,8 @@ def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, lo
         'beta':          cfg.get('beta', 1.0),
         'best_ari':      round(best_ari, 4),
         'iter_at_best':  best_iter,
-        'final_f1':      last.get('f1'),
+        'final_auroc':   last.get('auroc'),
+        'final_auprc':   last.get('auprc'),
         'final_ari':     last.get('ari'),
         'final_nmi':     last.get('nmi'),
         'duration_min':  round(total_minutes, 1),
@@ -122,7 +123,7 @@ def main():
             n_per_cluster = GRID * GRID if cfg.get('balanced_clustering', False) else None
 
             t0 = time.time()
-            adj_acc = {'precision': [], 'recall': [], 'f1': []}
+            adj_acc = {'auroc': [], 'auprc': []}
             cl_acc  = {'ari': [], 'nmi': [], 'purity': []}
             for _ in range(n_eval):
                 val_images, _ = next(val_gen)
@@ -148,9 +149,8 @@ def main():
                 'iteration':       iteration + 1,
                 'timestamp':       round(time.time() - train_start, 1),
                 'loss':            round(loss, 6),
-                'precision':       round(adj_metrics['precision'], 4),
-                'recall':          round(adj_metrics['recall'],    4),
-                'f1':              round(adj_metrics['f1'],        4),
+                'auroc':           round(adj_metrics['auroc'],     4),
+                'auprc':           round(adj_metrics['auprc'],     4),
                 'ari':             round(cl_metrics['ari'],        4),
                 'nmi':             round(cl_metrics['nmi'],        4),
                 'purity':          round(cl_metrics['purity'],     4),
@@ -163,7 +163,7 @@ def main():
 
             print(
                 f"iter {iteration+1:5d}  loss={loss:.4f}"
-                f"  F1={adj_metrics['f1']:.3f}  prec={adj_metrics['precision']:.3f}  rec={adj_metrics['recall']:.3f}"
+                f"  AUROC={adj_metrics['auroc']:.3f}  AUPRC={adj_metrics['auprc']:.3f}"
                 f"  ARI={cl_metrics['ari']:.3f}  NMI={cl_metrics['nmi']:.3f}"
                 f"  {'*' if improved else ''}"
             )

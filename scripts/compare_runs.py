@@ -27,13 +27,13 @@ def load_results():
 def print_table(results):
     cols = [
         ('run',                 'Run'),
+        ('beta',                'beta'),
         ('best_ari',            'Best ARI'),
         ('iter_at_best',        'Iter@best'),
-        ('final_f1',            'Final F1'),
+        ('final_auroc',         'Final AUROC'),
+        ('final_auprc',         'Final AUPRC'),
         ('final_ari',           'Final ARI'),
         ('duration_min',        'Min'),
-        ('n_eval_batches',      'Eval N'),
-        ('balanced_clustering', 'Balanced'),
         ('notes',               'Notes'),
     ]
     widths = {key: max(len(label), *(len(str(r.get(key, ''))) for r in results))
@@ -62,16 +62,16 @@ def plot_curves(results):
             continue
         with open(log) as f:
             entries = [json.loads(line) for line in f]
-        iters  = [e['iteration'] for e in entries]
-        ari    = [e['ari']       for e in entries]
-        f1     = [e['f1']        for e in entries]
-        axes[0].plot(iters, ari, label=r['run'])
-        axes[1].plot(iters, f1,  label=r['run'])
+        iters  = [e['iteration']      for e in entries]
+        ari    = [e['ari']            for e in entries]
+        auprc  = [e.get('auprc', e.get('f1')) for e in entries]
+        axes[0].plot(iters, ari,   label=r['run'])
+        axes[1].plot(iters, auprc, label=r['run'])
 
     axes[0].set_ylabel('ARI');  axes[0].set_ylim(0, 1); axes[0].legend(fontsize=8)
     axes[0].set_title('Adjusted Rand Index'); axes[0].grid(True, alpha=0.3)
-    axes[1].set_ylabel('F1');   axes[1].set_ylim(0, 1); axes[1].legend(fontsize=8)
-    axes[1].set_title('Adjacency F1'); axes[1].grid(True, alpha=0.3)
+    axes[1].set_ylabel('AUPRC'); axes[1].set_ylim(0, 1); axes[1].legend(fontsize=8)
+    axes[1].set_title('Adjacency AUPRC (threshold-free)'); axes[1].grid(True, alpha=0.3)
     axes[1].set_xlabel('Iteration')
 
     out = os.path.join(PROJECT_ROOT, 'runs_comparison.png')

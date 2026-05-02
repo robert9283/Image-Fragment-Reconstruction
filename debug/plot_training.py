@@ -24,9 +24,8 @@ with open(LOG_PATH) as f:
 
 iterations = [e['iteration']  for e in entries]
 loss       = [e['loss']       for e in entries]
-f1         = [e['f1']         for e in entries]
-precision  = [e['precision']  for e in entries]
-recall     = [e['recall']     for e in entries]
+auroc      = [e['auroc']      for e in entries]
+auprc      = [e['auprc']      for e in entries]
 ari        = [e['ari']        for e in entries]
 nmi        = [e['nmi']        for e in entries]
 purity     = [e['purity']     for e in entries]
@@ -44,11 +43,12 @@ axes[0].set_ylabel('Loss')
 axes[0].set_title('Training loss')
 axes[0].grid(True, alpha=0.3)
 
-axes[1].plot(x_values, f1,        label='F1',        color='darkorange')
-axes[1].plot(x_values, precision, label='Precision',  color='green',  linestyle='--')
-axes[1].plot(x_values, recall,    label='Recall',     color='red',    linestyle='--')
+axes[1].plot(x_values, auroc, label='AUROC', color='darkorange')
+axes[1].plot(x_values, auprc, label='AUPRC', color='green',  linestyle='--')
+axes[1].axhline(0.019, color='gray', linewidth=0.6, linestyle=':',
+                label='AUPRC random baseline (1.9%)')
 axes[1].set_ylabel('Score')
-axes[1].set_title('Adjacency prediction')
+axes[1].set_title('Adjacency prediction (threshold-free)')
 axes[1].legend()
 axes[1].set_ylim(0, 1)
 axes[1].grid(True, alpha=0.3)
@@ -82,5 +82,5 @@ if has_timing:
     print(f"  Avg eval step:       {np.mean(eval_times) * 1000:.1f} ms")
     print(f"  Eval overhead:       {overhead:.1f}% of total time")
 
-print(f"\nFinal   — loss={loss[-1]:.4f}  F1={f1[-1]:.3f}  ARI={ari[-1]:.3f}")
+print(f"\nFinal   — loss={loss[-1]:.4f}  AUROC={auroc[-1]:.3f}  AUPRC={auprc[-1]:.3f}  ARI={ari[-1]:.3f}")
 print(f"Best ARI={max(ari):.3f} at iteration {iterations[ari.index(max(ari))]}")
