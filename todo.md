@@ -14,6 +14,11 @@
 KMeans, andSpectralEmbedding)" gets cutoff. Also I think this can be moved into a foot note.
 - i would like that file siamese_approach.tex gets renamed into something more meaningful. The siamese_approach is not so telling.
 - can you take the summary.tex out of the git but leave it in the folder so I wont publish this later accidedently
+- please also give a clean definition of ARI. Encapsulate the example you give for ARI and puri into an example block.
+- check consistency of document and also consistency with code
+- update section 14: further suggestions. Some of this stuff has been done already
+- in section 6.1 "Constructing Training Labels" i would like to have a tikz picture of a 4 times 4 grid of fragments.
+- i would like to have a script that extract me a few failure modes. That is a set of 10 pictures where the clustering didnt work very well. In the caption of the image we should write all the hyperparameters used so we dont confuse models easily.
 
 ## Done
 
