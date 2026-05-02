@@ -1,5 +1,13 @@
 # Open work items
 
+- in the tex the section "Why Adjacency Prediction Helps" can be ommitted.
+- in section 5 "Architecture: Siamese Network" can you include a tikz picture depicting the architecture of the model in a schemadic way. Pleaase let the tikz picture live in a seperate tex file which is included.
+- please remove "Siamese Network" from the title
+- sectio 6.2 is not anymore needed. It can be shortend and included in the next section "Loss function"
+-in section 6.3 of the loss function please also mention which value of the tilt parameter corresponds to the normal case where the weighted binary cross entropy correspinds to binary cross entropy
+- shorten the paragraph: "Why we lean toward a moderate-to-aggressive tilt. " to a few sentences. No seperate paragraph is necessary
+- in fig 1 "Figure 1: Schematic of the predicted similarity graph. " the two label text for the purple and orange node in the caption overlapp so that the text is cutoff.
+
 ## Done
 
 - Weighted BCE bug fixed (`BCELoss(reduction='none')`, then weight, then mean).

@@ -3,8 +3,8 @@ data_path: to_share/data
 model: fragment-adjacency-predictor
 
 # run identification (omit run_name to auto-generate from timestamp)
-run_name: balanced_multibatch
-notes: "balanced spectral clustering + multi-batch eval (n=20)"
+run_name: wbce_beta_03
+notes: "fractional tilt; beta=1 overshot (recall 0.98 / prec 0.11)"
 
 n_images: 10
 max_iterations: 25000
@@ -12,7 +12,7 @@ eval_every: 250
 patience: 10
 
 # loss
-beta: 1.0                   # tilt parameter for WBCE: w_+ = beta * (n_-/n_+) = beta * 52
+beta: 0.3                   # tilt parameter for WBCE: w_+ = beta * (n_-/n_+) = beta * 52
 
 # evaluation
 n_eval_batches: 20          # average ARI/F1 over this many fresh validation batches

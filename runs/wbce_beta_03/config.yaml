@@ -1,0 +1,11 @@
+data_path: to_share/data
+model: fragment-adjacency-predictor
+run_name: wbce_beta_03
+notes: fractional tilt; beta=1 overshot (recall 0.98 / prec 0.11)
+n_images: 10
+max_iterations: 25000
+eval_every: 250
+patience: 10
+beta: 0.3
+n_eval_batches: 20
+balanced_clustering: true
