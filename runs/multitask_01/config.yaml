@@ -1,0 +1,14 @@
+data_path: to_share/data
+model: fragment-adjacency-predictor
+run_name: multitask_01
+notes: multi-task, gentle auxiliary (standard small-lambda regime)
+n_images: 10
+max_iterations: 25000
+eval_every: 250
+patience: 10
+beta: 0.01923
+lambda_adj: 1.0
+lambda_same: 0.1
+pos_weight_same: 1.0
+n_eval_batches: 20
+balanced_clustering: true

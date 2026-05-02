@@ -1,15 +1,21 @@
 #!/bin/bash
-# Run a small multi-task sweep back-to-back. All runs use plain BCE on the
-# adjacency head (beta = 1/52 = 0.01923, since the wbce sweep showed the
-# tilt is a second-order knob). What varies is the weight lambda_same on
-# the auxiliary same-image prediction head.
+# Two remaining multi-task data points (multitask_01 already finished
+# in a previous overnight session, ARI=0.489):
 #
-# - lambda_same = 0   (plain_bce_baseline): adjacency-only, our current best.
-#                     This run reproduces the existing result and gives a
-#                     fresh seed for the noise floor.
-# - lambda_same = 0.5 (multitask_05): mild same-image auxiliary loss.
-# - lambda_same = 1.0 (multitask_10): equal-weight multi-task.
-# - lambda_same = 2.0 (multitask_20): same-image dominates the loss.
+# - multitask_15: lambda_adj=1, lambda_same=1.5.  Between the equal-weight
+#                 setting that gave us our best ARI (0.570 at 1.0) and the
+#                 same-image-dominates setting we skipped at 2.0. Tells us
+#                 whether ARI continues to climb past 1.0 or peaks there.
+# - same_only:    lambda_adj=0, lambda_same=1.   Drops the adjacency loss
+#                 entirely and trains only on same-image prediction. Tells
+#                 us whether the adjacency pretext is doing real
+#                 representation work, or whether same-image alone is
+#                 sufficient. Also tests whether the encoder collapses to
+#                 a within-image-degenerate solution without the adjacency
+#                 regulariser.
+#
+# All runs use plain BCE on both heads (beta = 1/52 on adjacency,
+# pos_weight_same = 1 on same-image).
 #
 # Run from the project root:
 #     bash scripts/run_overnight.sh
@@ -23,22 +29,23 @@ source venv/bin/activate
 
 run_one() {
     local run_name="$1"
-    local lambda_same="$2"
-    local notes="$3"
+    local lambda_adj="$2"
+    local lambda_same="$3"
+    local notes="$4"
 
     echo
     echo "================================================================"
-    echo "[$(date)] starting $run_name  (lambda_same=$lambda_same)"
+    echo "[$(date)] starting $run_name  (lambda_adj=$lambda_adj  lambda_same=$lambda_same)"
     echo "================================================================"
 
-    python - "$run_name" "$lambda_same" "$notes" <<'PY'
+    python - "$run_name" "$lambda_adj" "$lambda_same" "$notes" <<'PY'
 import sys, yaml
-run_name, lambda_same, notes = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+run_name, lambda_adj, lambda_same, notes = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
 with open('config.yaml') as f:
     cfg = yaml.safe_load(f)
 cfg['run_name']     = run_name
 cfg['beta']         = 0.01923   # plain BCE on adjacency
-cfg['lambda_adj']   = 1.0
+cfg['lambda_adj']   = lambda_adj
 cfg['lambda_same']  = lambda_same
 cfg['notes']        = notes
 with open('config.yaml', 'w') as f:
@@ -49,12 +56,10 @@ PY
     echo "[$(date)] $run_name finished"
 }
 
-run_one plain_bce_baseline 0.0 "adjacency-only baseline (lambda_same=0)"
-run_one multitask_05       0.5 "multi-task, mild same-image weight"
-run_one multitask_10       1.0 "multi-task, equal weights"
-run_one multitask_20       2.0 "multi-task, same-image dominates"
+run_one multitask_15 1.0 1.5 "multi-task, same-image weighted higher than adjacency"
+run_one same_only    0.0 1.0 "same-image only (lambda_adj=0); ablation of the adjacency head"
 
 echo
 echo "================================================================"
-echo "[$(date)] all four runs finished"
+echo "[$(date)] both runs finished"
 python scripts/compare_runs.py
