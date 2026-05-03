@@ -309,8 +309,11 @@ metric here since it is the headline number for this work.
 Let $\mathcal{C} = \{C_1, \dots, C_N\}$ be the true partition of the fragments
 into $N = 10$ source-image groups, and $\hat{\mathcal{C}} = \{\hat{C}_1, \dots,
 \hat{C}_N\}$ the partition predicted by the model. For each pair of fragments, look
-at whether the two are in the same true group and whether they are in the same
-predicted cluster:
+at whether the two are in the same true group\footnote{For any pair of fragments
+$(i, j)$, the two are in the \emph{same true group} if $s(i) = s(j)$ (both came
+from the same source image), and in \emph{different true groups} if
+$s(i) \neq s(j)$ (one came from image A, the other from image B).} and whether
+they are in the same predicted cluster:
 
 \begin{itemize}
     \item $a$ = number of pairs in the same true group \emph{and} the same predicted cluster
