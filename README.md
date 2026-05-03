@@ -1,6 +1,10 @@
 # Image Fragment Reconstruction
 
-Self-supervised model that groups mixed image fragments back to their original source images.
+Self-supervised model that groups mixed image fragments back to their
+original source images.
+
+The full write-up of the approach, design decisions, and results is in
+[`doc/approach.pdf`](doc/approach.pdf).
 
 ## Setup
 
@@ -12,59 +16,137 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Project Structure
+The `to_share/data/` folder must contain the ImageNet-64 dataset
+(provided separately).
+
+## Quick start
+
+Train the best configuration (multi-task adjacency + same-image, plain
+BCE on both heads) and evaluate it:
+
+```bash
+# 1. Train one model — ~25 minutes on a MacBook Air M-series CPU.
+#    All hyperparameters are in config.yaml; the defaults match the
+#    best configuration documented in the report.
+python main.py
+
+# 2. Generate the per-run debug report and refresh the figures used
+#    in the approach document. Reads from runs/latest/ automatically.
+bash debug/generate_report.sh
+```
+
+After training, the per-run outputs (config snapshot, training log,
+checkpoint) live in `runs/<run_name>/`, and a one-line summary is
+appended to `results.jsonl`. A `runs/latest` symlink points to the
+most recent run.
+
+## Submission scripts
+
+The two scripts the case study asks for live in `src/`. Both load the
+best checkpoint and run on the test split.
+
+```bash
+python src/script1_metrics.py    # per-sample metrics over 1000 samples
+python src/script2_visualise.py  # cluster visualisation on a single sample
+```
+
+Edit the path at the top of each file if you want to evaluate a
+different checkpoint than `runs/latest/model.pt`.
+
+## Reproducing the results in the report
+
+The `scripts/` folder contains the experiments referenced in
+`doc/approach.pdf`:
+
+| Script | Purpose |
+|---|---|
+| `scripts/run_seed_sweep.sh` | Runs 5 seeded copies of a given configuration. |
+| `scripts/run_overnight.sh`  | Launches the multi-seed ANOVA experiment (~4h). |
+| `scripts/anova_analysis.py` | Computes mean ± SE per group and pairwise t-tests. |
+| `scripts/compare_runs.py`   | Markdown comparison table across all runs. |
+| `scripts/failure_modes.py`  | Generates the failure-modes figure for the report. |
+| `scripts/roc_curves.py`     | Generates the ROC / PR curves figure for the report. |
+
+`debug/generate_report.sh` runs the debug pipeline plus the two
+report-figure scripts, so the figures in `doc/approach.pdf` always
+reflect the current best checkpoint in `results.jsonl`.
+
+## Project structure
 
 ```
-config.yaml              # hyperparameters and paths
+config.yaml              # hyperparameters; one source of truth
 main.py                  # training entry point
 requirements.txt
+README.md
+todo.md                  # outstanding work
 src/
   model.py               # abstract base class for all models
-  fragments.py           # fragmentation and adjacency label construction
-  evaluate.py            # clustering and metrics (ARI, NMI, purity)
-  script1_metrics.py     # submission script 1: metrics over 1000 samples
-  script2_visualise.py   # submission script 2: visualisation on a single sample
-to_share/
-  src/data.py            # data loading and augmentation (provided)
-  data/                  # ImageNet64 dataset (provided)
-checkpoints/             # saved model weights
+  fragments.py           # fragmentation + adjacency label construction
+  fragment_adjacency_predictor.py   # the model: Siamese CNN + two heads
+  clustering.py          # spectral clustering, balanced variant, metrics
+  script1_metrics.py     # submission script 1
+  script2_visualise.py   # submission script 2
+scripts/
+  *                      # experiment runners and analysis utilities
 debug/
-  debug_pipeline.py      # sanity check for the data pipeline
-doc/                     # approach documents and report
-```
-
-## Training
-
-Edit `config.yaml` if needed, then:
-
-```bash
-python main.py
-```
-
-Training uses early stopping on validation ARI. The best checkpoint is saved automatically to `checkpoints/`.
-
-## Evaluation
-
-Edit the two paths at the top of each script, then run:
-
-**Script 1** — metrics over 1000 samples:
-```bash
-python src/script1_metrics.py
-```
-
-**Script 2** — visualisation on a single sample:
-```bash
-python src/script2_visualise.py
+  debug_pipeline.py      # sanity check on the data pipeline
+  debug_model.py         # adjacency-prediction inspection on best checkpoint
+  plot_training.py       # training curves from runs/latest/training_log.jsonl
+  generate_report.py     # bundles all debug plots into report.pdf
+  generate_report.sh     # full debug pipeline + report-figure refresh
+doc/
+  approach.tex / .pdf    # the main write-up
+  fig_*.tex              # standalone TikZ figures, included via \input
+  references.bib
+runs/                    # per-run outputs (config + log + checkpoint),
+                         # one subfolder per run, runs/latest -> newest
+to_share/
+  src/data.py            # data loader and augmentation (provided)
+  data/                  # ImageNet-64 dataset (provided)
+results.jsonl            # one-line summary per run, version-controlled
 ```
 
 ## Configuration
 
-| Parameter | Description |
-|---|---|
-| `model` | Model to use (currently: `fragment-adjacency-predictor`) |
-| `data_path` | Path to the dataset folder |
-| `checkpoint_path` | Path to save/load model weights |
-| `n_images` | Images per training sample (default: 10) |
-| `max_iterations` | Maximum training iterations |
-| `eval_every` | Evaluate on validation set every N iterations |
-| `patience` | Stop after N evaluations with no improvement |
+All hyperparameters live in `config.yaml`. Key knobs:
+
+| Key | Default | Description |
+|---|---|---|
+| `model`               | `fragment-adjacency-predictor` | Model to load |
+| `data_path`           | `to_share/data` | Dataset folder |
+| `n_images`            | `10`         | Images per training sample |
+| `max_iterations`      | `25000`      | Cap on training iterations |
+| `eval_every`          | `250`        | Evaluation frequency |
+| `patience`            | `10`         | Early-stopping patience (in eval steps) |
+| `n_eval_batches`      | `20`         | Validation batches averaged per eval |
+| `balanced_clustering` | `true`       | Hungarian-balanced spectral clustering |
+| `beta`                | `0.01923`    | WBCE tilt parameter on adjacency (= plain BCE) |
+| `lambda_adj`          | `1.0`        | Weight on the adjacency loss |
+| `lambda_same`         | `1.0`        | Weight on the same-image loss; `0` disables the head |
+| `pos_weight_same`     | `1.0`        | Weight on same-image positives (= plain BCE) |
+| `seed`                | unset        | If set, calls `torch.manual_seed` and `np.random.seed` |
+| `run_name`            | unset        | Auto-generated from timestamp if blank |
+| `notes`               | empty        | Free-form description, written into `results.jsonl` |
+
+## How a fresh submission would re-create the report
+
+```bash
+# 1. Set up the environment.
+python3.11 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Train. (~25 min)
+python main.py
+
+# 3. Refresh the report figures (uses runs/latest/ automatically).
+bash debug/generate_report.sh
+
+# 4. Compile the approach PDF.
+cd doc && bash build.sh
+
+# 5. (Optional) reproduce the multi-seed ANOVA experiment used in the
+#    "Multi-seed comparison" section of the report. ~4 hours.
+caffeinate -i bash scripts/run_overnight.sh    # macOS
+# or
+bash scripts/run_overnight.sh                  # Linux
+```
