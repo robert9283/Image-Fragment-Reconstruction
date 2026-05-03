@@ -27,10 +27,21 @@ source venv/bin/activate
 for seed in 0 1 2 3 4; do
     run_name="${BASE_NAME}_seed_${seed}"
 
-    # resume support: skip seeds that already have a saved checkpoint
-    if [ -f "runs/${run_name}/model.pt" ]; then
-        echo "[$(date)] skipping ${run_name} (already finished — runs/${run_name}/model.pt exists)"
+    # resume support: skip a seed only if it has BOTH a saved checkpoint AND
+    # a matching summary in results.jsonl. The combination guards against
+    # partial state (runs that were killed mid-training save a checkpoint but
+    # never write the summary): those get rerun from scratch on resume.
+    has_ckpt=false
+    has_summary=false
+    [ -f "runs/${run_name}/model.pt" ] && has_ckpt=true
+    grep -q "\"run\": \"${run_name}\"" results.jsonl 2>/dev/null && has_summary=true
+    if $has_ckpt && $has_summary; then
+        echo "[$(date)] skipping ${run_name} (already finished)"
         continue
+    fi
+    if $has_ckpt && ! $has_summary; then
+        echo "[$(date)] removing partial run ${run_name} (checkpoint without summary)"
+        rm -rf "runs/${run_name}"
     fi
 
     echo
