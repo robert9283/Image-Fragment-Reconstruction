@@ -10,6 +10,11 @@
   This will tell us whether the InferSent four-term construction actually helps
   on images or whether a simpler combination is just as good. ~75 min of
   training time total.
+- In Fig 1 "Schematic of the model." you talk about probabilites. I think probability is the wrong word. That mistake you made at severak positions.
+- the problem statement at the beginning of the tex file is a bit too formal. That is overkill. Just state the problem very precisiely. You can use a bit of mathematical terminology but do not formlaize fully
+.
+- please call section 4 just architecture and not architecure siamese
+- in section 7 "Evaluation Metric for the Clustering Task" in the definition of ARI please write explictiley in the definition in brackets at the start that the definition refers to ari.
 
 ## Done
 
