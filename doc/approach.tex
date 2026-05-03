@@ -420,6 +420,36 @@ between repeats of the same configuration with different random seeds) at
 approximately $\pm 0.04$ ARI, so a difference of less than $\sim 0.04$ between
 two runs should be treated as inconclusive.
 
+\subsection{Performance on the pretext task}
+
+The model is trained to predict adjacency, not to cluster directly. It is
+therefore worth checking how well it actually solves the pretext task, both
+in absolute terms and relative to the much harder downstream task.
+
+The adjacency-only baseline (\texttt{plain\_bce\_baseline}) reaches AUROC
+$= 0.970$ and AUPRC $= 0.443$. The AUROC value can be read directly: given a
+random adjacent pair and a random non-adjacent pair, the model assigns the
+adjacent one a higher confidence score 97\% of the time. AUPRC at $0.443$ is
+nearly $25\times$ the random baseline of $0.019$ (the positive rate); the
+top-ranked pairs are almost all true adjacencies. By any reasonable standard
+the model has \emph{nearly solved} the binary pretext task.
+
+By contrast, the downstream clustering ARI is $0.554$ on the same checkpoint
+and run --- well above random ($0.0$) and meaningful, but far from perfect.
+The gap is real and instructive: adjacency-prediction quality sits within a
+few percentage points of its ceiling, while clustering quality is held back
+by something the pretext metric does not capture (intrinsic ambiguity in
+near-uniform fragments, repetitive textures, and so on; see Section~10 on
+failure modes).
+
+When we add the same-image head and increase $\lambda_{\text{same}}$ from $0$
+to $1$, adjacency AUROC drops slightly (from $0.970$ to $0.959$) and AUPRC
+drops more (from $0.443$ to $0.328$). The model becomes a slightly worse
+adjacency predictor in exchange for a denser, more task-aligned signal, and
+trades a $\sim 0.011$ AUROC for a $+0.016$ ARI. The trade-off is consistent
+with the intuition that pretext-task quality is no longer the binding
+constraint at this point.
+
 \subsection{Effect of the loss tilt parameter $\beta$}
 
 The first ablation sweeps the WBCE tilt over $\beta \in \{0.019, 0.3, 1.0\}$:
