@@ -1,8 +1,5 @@
 # Open work items
 
-- check consistency of document and also consistency with code
-- the problem statement at the beginning of the tex file is a bit too formal. That is overkill. Just state the problem very precisiely. You can use a bit of mathematical terminology but do not formlaize fully.
-- please call section 4 just architecture and not architecure siamese
 - ablate the comparison-head input. Three runs at otherwise-identical settings:
     - Run 1: current four-term combination `[a-b, a*b, a, b]` (1024-dim head)
     - Run 2: plain concatenation `[a, b]` only (512-dim head)
@@ -10,11 +7,6 @@
   This will tell us whether the InferSent four-term construction actually helps
   on images or whether a simpler combination is just as good. ~75 min of
   training time total.
-- In Fig 1 "Schematic of the model." you talk about probabilites. I think probability is the wrong word. That mistake you made at severak positions.
-- the problem statement at the beginning of the tex file is a bit too formal. That is overkill. Just state the problem very precisiely. You can use a bit of mathematical terminology but do not formlaize fully
-.
-- please call section 4 just architecture and not architecure siamese
-- in section 7 "Evaluation Metric for the Clustering Task" in the definition of ARI please write explictiley in the definition in brackets at the start that the definition refers to ari.
 
 ## Done
 
@@ -45,6 +37,17 @@
   best checkpoint, with hyperparameters in the figure caption.
 - Failure-modes script wired into `debug/generate_report.sh` so the figure
   is refreshed alongside the rest of the debug plots.
+- Section 4 renamed from "Architecture: Siamese Network" to just "Architecture".
+- ARI definition prefix: "Definition (Adjusted Rand Index)".
+- Problem Statement simplified: dropped the heavy formal definitions
+  ($\mathcal{I}$, $f_k$, $\hat{\mathcal{C}}$, two enumerated constraints,
+  bulleted "Known structure"). Replaced with two short paragraphs that state
+  the same content directly with concrete numbers.
+- "Probability" replaced with "confidence" wherever it referred to model output.
+- Multi-task and same-only ablations finished and incorporated into the Results
+  section; consistency pass between doc and code completed.
+- `seed` config knob added to `main.py` (`torch.manual_seed` and
+  `np.random.seed` are called when `seed` is set in `config.yaml`).
 
 ## Historical context (kept for the report)
 

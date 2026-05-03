@@ -28,51 +28,27 @@
 \section{Problem Statement}
 % ─────────────────────────────────────────────
 
-Let $\mathcal{I} = \{I_1, \dots, I_N\}$ be a set of $N$ source images, each of spatial
-resolution $H \times W \times 3$. Each image is divided into a regular $G \times G$ grid
-of non-overlapping fragments of size $\frac{H}{G} \times \frac{W}{G} \times 3$, yielding
-$G^2$ fragments per image and $M = N \cdot G^2$ fragments in total. In the experimental
-setting used here $N = 10$, $H = W = 64$, $G = 4$, giving fragments of size
-$16 \times 16 \times 3$ and $M = 160$ fragments per batch.
+Each batch contains $N = 10$ source images of resolution $64 \times 64 \times 3$.
+Every image is cut into a regular $4 \times 4$ grid of non-overlapping
+$16 \times 16$ fragments, and the resulting $M = 160$ fragments from all 10
+images are pooled into a single unordered collection. The model must partition
+the collection into 10 groups such that all fragments in a group come from the
+same source image.
 
-Let $f_k \in \mathbb{R}^{16 \times 16 \times 3}$ denote fragment $k$, and let
-$s(k) \in \{1, \dots, N\}$ be its source image. The fragments from all $N$ images are
-pooled into a single unordered collection. The task is:
+Two constraints make the task non-trivial. First, the original grid coordinates
+of each fragment are withheld at inference, so absolute position cannot be used
+as a feature. Second, the source-image label of each fragment, which we denote
+$s(k) \in \{1, \dots, 10\}$, is withheld during training, so the model has to
+learn from structural properties of the fragments rather than from direct
+supervision. Two facts about the partition are known and may be exploited:
+there are exactly 10 clusters, and each contains exactly 16 fragments.
 
-\begin{quote}
-\textit{Given the pooled collection of $M$ fragments with no positional or source
-information, assign each fragment to one of $N$ groups such that all fragments assigned
-to the same group originate from the same source image.}
-\end{quote}
-
-Formally, the goal is to recover a partition $\hat{\mathcal{C}} = \{\hat{C}_1, \dots,
-\hat{C}_N\}$ of $\{1, \dots, M\}$ such that for each predicted cluster $\hat{C}_n$ there
-exists a source image $I_{s}$ with $s(k) = s$ for all $k \in \hat{C}_n$.
-
-\paragraph{Constraints.}
-Two constraints make this non-trivial:
-
-\begin{enumerate}
-    \item \textbf{No positional information.} The original grid coordinates of each
-          fragment are not provided at inference time. The model may not use absolute
-          position as a feature.
-    \item \textbf{No labels during training.} The source identity $s(k)$ is never
-          provided to the model as a supervisory signal. The model must learn from
-          structural properties of the fragments themselves.
-\end{enumerate}
-
-\paragraph{Known structure.}
-Although labels are withheld, the following quantities are known and may be exploited:
-\begin{itemize}
-    \item The total number of source images $N = 10$ (so $k = N$ clusters are sought).
-    \item Each source image contributes exactly $G^2 = 16$ fragments, so all clusters
-          have equal size.
-    \item Spatial adjacency within a source image is fully determined by the grid
-          structure and can be derived without labels: fragments at grid positions
-          $(r, c)$ and $(r', c')$ are adjacent if and only if $|r - r'| + |c - c'| = 1$.
-\end{itemize}
-
-The third point is the key observation exploited by the proposed approach (Section~2).
+Crucially, although the source labels are hidden, \emph{spatial adjacency}
+within a source image is fully determined by the grid: two fragments at grid
+positions $(r, c)$ and $(r', c')$ within the same source image are adjacent
+iff $|r - r'| + |c - c'| = 1$. This adjacency relation is therefore a
+free-of-charge supervisory signal --- and the one our pretext task exploits
+(Section~2).
 
 % ─────────────────────────────────────────────
 \section{Related Work}
@@ -130,7 +106,7 @@ This is self-supervised throughout: no labels beyond those derivable from the gr
 structure are ever used.
 
 % ─────────────────────────────────────────────
-\section{Architecture: Siamese Network}
+\section{Architecture}
 % ─────────────────────────────────────────────
 
 The model is a Siamese network: a shared encoder is applied to each of two input
@@ -329,7 +305,7 @@ below in the multi-batch averaging paragraph); the downstream clustering is
 evaluated with the \textbf{Adjusted Rand Index (ARI)}. We focus on the clustering
 metric here since it is the headline number for this work.
 
-\paragraph{Definition.}
+\paragraph{Definition (Adjusted Rand Index).}
 Let $\mathcal{C} = \{C_1, \dots, C_N\}$ be the true partition of the fragments
 into $N = 10$ source-image groups, and $\hat{\mathcal{C}} = \{\hat{C}_1, \dots,
 \hat{C}_N\}$ the partition predicted by the model. For each pair of fragments, look

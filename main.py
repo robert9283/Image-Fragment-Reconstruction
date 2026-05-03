@@ -75,6 +75,7 @@ def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, lo
     summary = {
         'run':           run_name,
         'model':         cfg.get('model'),
+        'seed':          cfg.get('seed'),
         'beta':          cfg.get('beta', 1.0),
         'lambda_adj':    cfg.get('lambda_adj',  1.0),
         'lambda_same':   cfg.get('lambda_same', 0.0),
@@ -96,6 +97,12 @@ def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, lo
 
 def main():
     cfg = load_config()
+    seed = cfg.get('seed')
+    if seed is not None:
+        import torch
+        torch.manual_seed(int(seed))
+        np.random.seed(int(seed))
+        print(f"Random seed: {seed}")
     run_dir, run_name = setup_run_dir(cfg)
     print(f"Run: {run_name}")
     print(f"Dir: {run_dir}")
