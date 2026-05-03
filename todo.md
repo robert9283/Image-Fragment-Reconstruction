@@ -1,7 +1,15 @@
 # Open work items
 
 - check consistency of document and also consistency with code
-- In Fig 1 "Schematic of the model." you talk about probabilites. I think probability is the wrong word. That mistake you made at severak positions.
+- the problem statement at the beginning of the tex file is a bit too formal. That is overkill. Just state the problem very precisiely. You can use a bit of mathematical terminology but do not formlaize fully.
+- please call section 4 just architecture and not architecure siamese
+- ablate the comparison-head input. Three runs at otherwise-identical settings:
+    - Run 1: current four-term combination `[a-b, a*b, a, b]` (1024-dim head)
+    - Run 2: plain concatenation `[a, b]` only (512-dim head)
+    - Run 3: difference + product `[a-b, a*b]` only (512-dim head)
+  This will tell us whether the InferSent four-term construction actually helps
+  on images or whether a simpler combination is just as good. ~75 min of
+  training time total.
 
 ## Done
 

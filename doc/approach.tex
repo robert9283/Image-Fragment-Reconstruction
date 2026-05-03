@@ -167,22 +167,28 @@ sharing ensures that the comparison is symmetric and that the encoder learns a u
 fragment representation rather than one tuned to a specific input slot.
 
 \paragraph{Comparison head (MLP).}
-A small multi-layer perceptron takes as input a 1024-dimensional vector formed by
-concatenating four interaction terms between the two embeddings $\mathbf{a} =
-\text{CNN}(f_i)$ and $\mathbf{b} = \text{CNN}(f_j)$:
-
+Let $\mathbf{a} = \text{CNN}(f_i)$ and $\mathbf{b} = \text{CNN}(f_j)$ denote the two
+embeddings produced by the shared encoder for an input pair. The comparison head
+takes as input the 1024-dimensional vector
 \[
-\mathbf{z}_{ij} = \bigl[\mathbf{a} - \mathbf{b} \;\|\; \mathbf{a} \odot \mathbf{b} \;\|\; \mathbf{a} \;\|\; \mathbf{b}\bigr] \in \mathbb{R}^{1024}
+\mathbf{z}_{ij} = \bigl[\mathbf{a} - \mathbf{b} \;\|\; \mathbf{a} \odot \mathbf{b} \;\|\; \mathbf{a} \;\|\; \mathbf{b}\bigr] \in \mathbb{R}^{1024},
 \]
-
-The difference $\mathbf{a} - \mathbf{b}$ captures asymmetric discrepancies; the
-element-wise product $\mathbf{a} \odot \mathbf{b}$ captures feature co-activation; and
-including both raw embeddings preserves their individual information. The MLP maps
-$\mathbf{z}_{ij}$ through a hidden layer of size 128 (ReLU) to a single scalar in
+formed by concatenating ($\,\|\,$) four sub-vectors of size 256: the element-wise
+difference $\mathbf{a} - \mathbf{b}$, capturing direction and magnitude of
+dissimilarity; the element-wise (Hadamard) product $\mathbf{a} \odot \mathbf{b}$,
+capturing feature co-activation (large only when both fragments score high on the
+same feature); and the two raw embeddings, preserving each fragment's individual
+information. This four-term combination is borrowed from the InferSent sentence-pair
+classification model of \textcite{infersent2017}, where it was shown to outperform
+plain concatenation on natural-language inference. We adopt it here without
+ablation in our setting; whether the explicit difference and product terms help
+on image fragments, or whether a simpler $[\mathbf{a}, \mathbf{b}]$
+concatenation with a larger hidden layer would do as well, is left as future
+work. The MLP maps
+$\mathbf{z}_{ij}$ through that hidden layer (ReLU) to a single scalar in
 $[0, 1]$:
-
 \[
-p_{ij} = \sigma\!\bigl(W_2\,\text{ReLU}(W_1\,\mathbf{z}_{ij} + b_1) + b_2\bigr)
+p_{ij} = \sigma\!\bigl(W_2\,\text{ReLU}(W_1\,\mathbf{z}_{ij} + b_1) + b_2\bigr).
 \]
 
 % ─────────────────────────────────────────────
