@@ -26,6 +26,13 @@ source venv/bin/activate
 
 for seed in 0 1 2 3 4; do
     run_name="${BASE_NAME}_seed_${seed}"
+
+    # resume support: skip seeds that already have a saved checkpoint
+    if [ -f "runs/${run_name}/model.pt" ]; then
+        echo "[$(date)] skipping ${run_name} (already finished — runs/${run_name}/model.pt exists)"
+        continue
+    fi
+
     echo
     echo "================================================================"
     echo "[$(date)] starting ${run_name}"
