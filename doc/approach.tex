@@ -518,6 +518,20 @@ high AUROC; the precision-recall curve drops more steeply, reflecting how
 hard it is to maintain precision on a problem with only $\sim 1.9\%$
 positives.
 
+\input{fig_weight_distribution.tex}
+
+To understand \emph{how} the model assigns confidence,
+Figure~\ref{fig:weight-distribution} shows the score distribution
+broken down by the true class of each pair. Three regimes are visible:
+cross-image pairs are concentrated near zero, strictly adjacent pairs
+peak around $0.7$--$0.85$, and same-image-but-not-adjacent pairs sit
+in the middle and span the whole $[0, 1]$ range. The model has therefore
+implicitly learned a softer notion than strict adjacency: a graded
+\emph{same-source} signal, with adjacency at its high end. This is what
+the spectral clustering step ultimately consumes, and it is what makes
+the gap between the binary pretext metric and the downstream ARI both
+expected and informative.
+
 \subsection{Effect of the loss tilt parameter $\beta$}
 
 The first ablation sweeps the WBCE tilt over $\beta \in \{0.019, 0.3, 1.0\}$:
