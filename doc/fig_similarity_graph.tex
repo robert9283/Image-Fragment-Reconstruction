@@ -25,7 +25,7 @@
 \node[src2] (b2) at (6.8, 1.6)     {$f_6$};
 \node[src2] (b3) at (5.4, 0.8)     {$f_7$};
 
-% --- intra-A edges (high probability, drawn strong) ---
+% --- intra-A edges (high confidence, drawn strong) ---
 \draw[strong] (a1) -- (a2) node[weight, midway] {$0.91$};
 \draw[strong] (a1) -- (a3) node[weight, midway] {$0.87$};
 \draw[strong] (a2) -- (a4) node[weight, midway] {$0.82$};
@@ -38,7 +38,7 @@
 \draw[strong] (b2) -- (b3) node[weight, midway] {$0.79$};
 \draw[medium] (b1) -- (b3) node[weight, near start] {$0.51$};
 
-% --- cross edges (low probability, weak/dashed) ---
+% --- cross edges (low confidence, weak/dashed) ---
 \draw[weak] (a4) -- (b1) node[weight, midway] {$0.08$};
 \draw[weak] (a4) -- (b3) node[weight, near end] {$0.05$};
 \draw[weak] (a2) -- (b1) node[weight, near end] {$0.06$};

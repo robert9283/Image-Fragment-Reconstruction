@@ -134,10 +134,10 @@ structure are ever used.
 % ─────────────────────────────────────────────
 
 The model is a Siamese network: a shared encoder is applied to each of two input
-fragments, and a comparison head turns the two embeddings into a binary
-prediction (Figure~\ref{fig:architecture}). When the multi-task loss is enabled,
-a second comparison head with the same structure is added for same-image
-prediction.
+fragments, and a comparison head maps the two embeddings to a confidence score
+$p_{ij} \in [0, 1]$ for the binary question of interest
+(Figure~\ref{fig:architecture}). When the multi-task loss is enabled, a second
+comparison head with the same structure is added for the same-image task.
 
 \begin{figure}[h]
 \centering
@@ -146,7 +146,8 @@ prediction.
 to each of two input fragments; its $256$-dimensional embeddings are combined into a
 single $1024$-dimensional vector via concatenation of difference, element-wise
 product, and the two embeddings themselves; this vector is fed to one or two
-comparison heads (adjacency, same-image) that produce binary predictions.}
+comparison heads (adjacency, same-image) that produce a confidence score
+$p_{ij} \in [0, 1]$ for the corresponding binary question.}
 \label{fig:architecture}
 \end{figure}
 
