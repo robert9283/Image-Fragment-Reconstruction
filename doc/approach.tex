@@ -430,19 +430,35 @@ study is complete.
 \section{Results}
 % ─────────────────────────────────────────────
 
-\subsection{Headline number}
+\subsection{Headline number and run-to-run noise}
 
 The best configuration we found uses a multi-task loss with equal weights on the
 adjacency and same-image heads, plain BCE on both, balanced spectral clustering,
-and validation ARI averaged over 20 fresh batches. It achieves
-\[
-\text{best ARI} = 0.570, \qquad \text{adjacency AUROC} = 0.959,
-\qquad \text{adjacency AUPRC} = 0.328
-\]
-on the validation generator. We estimate the run-to-run noise floor (variation
-between repeats of the same configuration with different random seeds) at
-approximately $\pm 0.04$ ARI, so a difference of less than $\sim 0.04$ between
-two runs should be treated as inconclusive.
+and validation ARI averaged over 20 fresh batches. We trained the same
+configuration five times with random seeds $\{0, 1, 2, 3, 4\}$ to estimate the
+run-to-run variance:
+
+\begin{center}
+\begin{tabular}{lccccc|cc}
+\toprule
+\textbf{seed} & 0 & 1 & 2 & 3 & 4 & \textbf{mean} & \textbf{std} \\
+\midrule
+best ARI       & $0.575$ & $0.545$ & $0.571$ & $0.512$ & $0.502$ & $0.541$ & $\mathbf{0.033}$ \\
+final AUROC    & $0.960$ & $0.958$ & $0.954$ & $0.952$ & $0.947$ & $0.954$ & $0.005$ \\
+final AUPRC    & $0.339$ & $0.318$ & $0.319$ & $0.297$ & $0.297$ & $0.314$ & $0.018$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The best single seed achieves ARI $= 0.575$, the mean across 5 seeds is
+$0.541$, and we use $\sigma_{\text{seed}} = 0.033$ as our noise floor.
+Differences smaller than $\sim 0.066$ (2$\sigma$) between configurations
+should be treated as inconclusive. AUROC is much more stable than ARI:
+$\sigma$ on AUROC is only $0.005$, an order of magnitude tighter. The
+model's underlying ranking quality is robust to seed choice; what varies
+is how cleanly that ranking translates into a discrete partition --- the
+spectral clustering step is amplifying small representation differences
+into noticeable ARI differences.
 
 \subsection{Performance on the pretext task}
 
@@ -451,12 +467,15 @@ therefore worth checking how well it actually solves the pretext task, both
 in absolute terms and relative to the much harder downstream task.
 
 The adjacency-only baseline (\texttt{plain\_bce\_baseline}) reaches AUROC
-$= 0.970$ and AUPRC $= 0.443$. The AUROC value can be read directly: given a
+$= 0.970$ and AUPRC $= 0.443$, and the multi-task best configuration
+(averaged across the 5 seeds in the table above) reaches AUROC
+$= 0.954$ and AUPRC $= 0.314$. The AUROC value can be read directly: given a
 random adjacent pair and a random non-adjacent pair, the model assigns the
-adjacent one a higher confidence score 97\% of the time. AUPRC at $0.443$ is
-nearly $25\times$ the random baseline of $0.019$ (the positive rate); the
-top-ranked pairs are almost all true adjacencies. By any reasonable standard
-the model has \emph{nearly solved} the binary pretext task.
+adjacent one a higher confidence score $\sim 95\%$\,--\,$97\%$ of the time.
+AUPRC is on the order of $20\times$ the random baseline of $0.019$ (the
+positive rate); the top-ranked pairs are almost all true adjacencies. By
+any reasonable standard the model has \emph{nearly solved} the binary
+pretext task.
 
 By contrast, the downstream clustering ARI is $0.554$ on the same checkpoint
 and run --- well above random ($0.0$) and meaningful, but far from perfect.
