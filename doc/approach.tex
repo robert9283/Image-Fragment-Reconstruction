@@ -450,6 +450,14 @@ trades a $\sim 0.011$ AUROC for a $+0.016$ ARI. The trade-off is consistent
 with the intuition that pretext-task quality is no longer the binding
 constraint at this point.
 
+\input{fig_roc_curves.tex}
+
+Figure~\ref{fig:roc-curves} shows the corresponding ROC and precision-recall
+curves. The ROC corner sits well into the top-left, consistent with the
+high AUROC; the precision-recall curve drops more steeply, reflecting how
+hard it is to maintain precision on a problem with only $\sim 1.9\%$
+positives.
+
 \subsection{Effect of the loss tilt parameter $\beta$}
 
 The first ablation sweeps the WBCE tilt over $\beta \in \{0.019, 0.3, 1.0\}$:

@@ -12,9 +12,12 @@ python debug/debug_model.py
 python debug/plot_training.py
 python debug/generate_report.py
 
-# refresh the failure-modes figure used in the approach document, so it
-# always reflects the current best checkpoint in results.jsonl
+# refresh the figures used in the approach document so they always reflect
+# the current best checkpoint in results.jsonl
 python scripts/failure_modes.py
+python scripts/roc_curves.py
 
 echo "Report ready: debug/report.pdf"
-echo "Approach doc figure refreshed: doc/failure_modes.png, doc/fig_failure_modes.tex"
+echo "Approach doc figures refreshed:"
+echo "  doc/failure_modes.png, doc/fig_failure_modes.tex"
+echo "  doc/roc_curves.png, doc/fig_roc_curves.tex"
