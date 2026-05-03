@@ -223,20 +223,44 @@ parameter $\beta \geq 1$:
 
 The textbook value is $\beta = 1$, the class-balanced loss: it equalises the
 total gradient contribution of the two classes, treating a single positive as
-worth 52 negatives. Setting $\beta > 1$ over-weights positives beyond this
-point --- a positive mistake is now \emph{more} costly than the natural class
-ratio implies. For our downstream task this is desirable, and we expect the
-optimum to lie at a moderate-to-aggressive tilt.
+worth 52 negatives. The plain (unweighted) BCE corresponds to $\beta = 1/52$.
+Empirically (Section~9.3) $\beta$ turns out to be a second-order knob in this
+range and we adopt $\beta = 1/52$ throughout.
 
-\paragraph{Why we lean toward a moderate-to-aggressive tilt.}
-The downstream task is graph clustering, not per-edge classification. False
-negatives directly weaken intra-cluster connectivity, while false positives are
-only harmful when they connect fragments from \emph{different} source images ---
-a case the model rarely produces because cross-image fragments are visually
-dissimilar. Same-image false positives, the more common kind, actually reinforce
-the connectivity spectral clustering relies on. The error costs are therefore
-asymmetric in favour of recall, and we expect the optimal $\beta$ to lie above
-the class-balanced point.
+\paragraph{Multi-task loss with same-image prediction.}
+There is a more fundamental mismatch in the loss above: adjacency is a
+\emph{local} signal (only $24$ pairs per image), while the downstream task is
+\emph{global} clustering by source image. Two fragments from opposite corners
+of the same source image are penalised as a negative example by adjacency BCE,
+even though the clustering wants them in the same group. This mismatch limits
+how well any model trained purely on adjacency can do.
+
+The natural fix is a second prediction head trained on a denser, more
+task-aligned signal: same-image membership. The label
+\[
+y^{\text{same}}_{ij} = \mathbb{1}\bigl[s(i) = s(j)\bigr]
+\]
+is also free, derivable from the labels passed to the data generator, and has
+a $\sim 10\%$ positive rate (versus $1.9\%$ for adjacency). We add a second
+comparison head identical in structure to the adjacency head and minimise the
+weighted sum
+\[
+\mathcal{L}_{\text{multi}} =
+    \lambda_{\text{adj}}\,\mathcal{L}_{\text{WBCE}}^{\text{adj}}(\beta_{\text{adj}})
+  + \lambda_{\text{same}}\,\mathcal{L}_{\text{WBCE}}^{\text{same}}(\beta_{\text{same}}).
+\]
+We use plain BCE on both heads ($\beta = 1/52$ for adjacency, $\beta = 1/9.6$
+for same-image, the analogous plain-BCE value given the same-image positive
+rate) and equal weights $\lambda_{\text{adj}} = \lambda_{\text{same}} = 1$.
+At inference the same-image head's confidence scores are used as the
+similarity matrix for spectral clustering. The choice of weights is ablated
+in Section~9.4.
+
+The two signals are complementary in the sense documented by the
+same-image-only ablation in Section~9.5: adjacency provides a fine-grained
+relational signal that prevents the encoder from collapsing within an image,
+while same-image provides the dense task-aligned signal that the clustering
+step actually consumes.
 
 \subsection{Computational Cost}
 
