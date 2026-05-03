@@ -7,6 +7,21 @@
   This will tell us whether the InferSent four-term construction actually helps
   on images or whether a simpler combination is just as good. ~75 min of
   training time total.
+- Add a purity column to the multi-task sweep table (the largest table, where
+  it's most informative). Currently purity is only logged in per-eval log
+  entries, not in the per-run summary in results.jsonl. Adding a
+  `final_purity` field to the summary is a one-line change in main.py;
+  picking it up in the table is another one-liner.
+- After tonight's ANOVA runs finish, write up Section 9.5 (multi-seed comparison
+  with t-tests) and update the headline numbers in Section 9.1 to use the
+  proper means.
+- clean the git up a bit and make it submission ready. Remember this task is
+  for a job interview. Everything should be concise, clean and easy to
+  understand for someone that is not familiar with the code. After
+  submission they will need to run the pipeline to generate the model file.
+  It should be clear how the models are generated and how the report was
+  generated.
+- in the further suggestions section can you remove the paragraph "Differentiable surrogate for ARI."
 
 ## Done
 
@@ -48,6 +63,21 @@
   section; consistency pass between doc and code completed.
 - `seed` config knob added to `main.py` (`torch.manual_seed` and
   `np.random.seed` are called when `seed` is set in `config.yaml`).
+- "Multi-batch averaging" paragraph moved out of the ARI section and into
+  the Training section as the new "Validation: multi-batch averaging"
+  subsection.
+- Purity definition added to Section 7 alongside the ARI definition, with
+  the formal expression $\frac{1}{M}\sum_n \max_m |\hat{C}_n \cap C_m|$ and
+  a note that balanced clustering removes the over-fragmentation inflation.
+- Decision Points Summary section removed.
+- Per-head pretext-task metrics: same-image AUROC/AUPRC are now logged
+  alongside adjacency AUROC/AUPRC whenever the same-image head is active
+  (lambda_same > 0). New keys: same_auroc, same_auprc per eval step,
+  final_same_auroc / final_same_auprc per-run summary.
+- Single-seed result discussion in the Results section shortened where
+  differences between configurations are within noise (beta sweep, full
+  lambda_same sweep, same-only ablation now read more cautiously, with
+  forward-reference to the multi-seed Section 9.5).
 
 ## Historical context (kept for the report)
 

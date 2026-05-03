@@ -269,6 +269,19 @@ embeddings are then combined using tensor operations, and the lightweight MLP pr
 all 12,720 pairs. Since the expensive step (the CNN) runs only 160 times, the
 computational overhead is manageable.
 
+\subsection{Validation: multi-batch averaging}
+
+Each validation step samples a fresh batch of 10 source images from the test
+generator. Individual batches vary substantially in difficulty (some draws of
+10 ImageNet classes are visually well-separated, others contain
+near-duplicates), so a single-batch ARI estimate has high variance. We
+average each downstream metric (ARI, NMI; see Section 7 for definitions) and
+each pretext-task metric (AUROC, AUPRC) over $n_{\text{eval}} = 20$ fresh
+validation batches per evaluation step. This stabilises the training
+curves, and --- more importantly --- the early-stopping decision and the
+checkpoint-selection criterion, which would otherwise be biased toward
+lucky batches.
+
 % ─────────────────────────────────────────────
 \section{From Pretext Task to Clustering}
 % ─────────────────────────────────────────────
@@ -355,10 +368,23 @@ of fixed cluster sizes:
 A random clustering scores $\text{ARI} = 0$, a perfect one scores $\text{ARI} = 1$,
 and a clustering worse than random can score below zero.
 
+\paragraph{Definition (purity).}
+\emph{Purity} is the simpler clustering metric we report alongside ARI. It is
+the fraction of fragments that share their predicted cluster with the true
+plurality class of that cluster:
+\[
+\text{purity}(\hat{\mathcal{C}}, \mathcal{C})
+= \frac{1}{M}\sum_{n=1}^{N} \max_{m} \,|\hat{C}_n \cap C_m|.
+\]
+Purity ranges from $0$ to $1$. With our balanced spectral clustering enforcing
+exactly $G^2 = 16$ fragments per cluster, purity has no inflation toward $1$
+from over-fragmentation; it directly reads as ``fraction of fragments
+correctly absorbed by their cluster's plurality source''.
+
 \paragraph{Why ARI rather than purity.}
-ARI is preferred over simpler metrics like purity because purity only looks at the
-dominant true class in each predicted cluster and ignores how the remaining errors
-are distributed.
+ARI is preferred as the primary metric because purity only looks at the
+dominant true class in each predicted cluster and ignores how the remaining
+errors are distributed.
 
 \begin{quote}\small
 \textbf{Example.} Suppose two predicted clusters each have $60\%$ fragments
@@ -371,15 +397,6 @@ counts pair-level agreements rather than looking only at the plurality label.
 \textbf{NMI (Normalised Mutual Information)} is reported alongside ARI as a
 complementary metric. It measures how much information the predicted clusters share
 with the true groupings, normalised to $[0, 1]$.
-
-\paragraph{Multi-batch averaging.}
-Each evaluation step samples a fresh batch of 10 source images from the validation
-generator. Because individual batches vary substantially in difficulty (some draws of
-10 ImageNet classes are visually well-separated, others contain near-duplicates), a
-single-batch ARI estimate has high variance. We average each metric over
-$n_{\text{eval}} = 20$ fresh validation batches per evaluation step. This stabilises
-the training curves and, crucially, the early-stopping decision and the
-checkpoint-selection criterion, which would otherwise be biased toward lucky batches.
 
 % ─────────────────────────────────────────────
 \section{Experimental Setup}
@@ -519,20 +536,14 @@ textbook class-balanced weighting ($w_{+} = 52$).
 \end{tabular}
 \end{center}
 
-AUROC barely moves across two orders of magnitude in $\beta$: the model's
-\emph{ranking} of pairs is essentially independent of the loss weighting. What
-changes is calibration, which spectral clustering picks up indirectly through
-the magnitude of the edge weights. ARI varies more (by $\sim 0.07$ between best
-and worst), but a substantial part of that is run-to-run noise. The cleanest
-reading is that $\beta$ is a second-order knob across the range we tested, with
-plain BCE performing at least as well as any weighted variant. We adopt
-$\beta = 1/52$ (plain BCE) for all subsequent experiments.
-
-This contradicts the prior expectation we expressed in Section 6 that an
-aggressive tilt $\beta \in [1.5, 3]$ would help. The asymmetric-error-cost
-argument is not wrong in principle, but the model already learns a near-optimal
-ranking under plain BCE (AUROC $\approx 0.97$), so additional reweighting has
-little remaining effect on the downstream clustering.
+All three runs are single-seed. AUROC is essentially constant
+(within $0.005$, well below the noise floor) and the ARI differences
+($\sim 0.07$ between best and worst) are within $\sim 2\sigma$ of zero. The
+data is consistent with $\beta$ being a second-order knob across the range
+tested, contradicting the prior expectation we expressed in Section 6 of an
+aggressive tilt being optimal. We adopt $\beta = 1/52$ (plain BCE) for all
+subsequent experiments on the grounds of simplicity, not measured
+superiority.
 
 \subsection{Effect of the multi-task weight $\lambda_{\text{same}}$}
 
@@ -559,21 +570,22 @@ downstream objective.
 \end{tabular}
 \end{center}
 
-The trend is non-monotonic. A small auxiliary same-image weight ($\lambda =
-0.1$) actually \emph{hurts} ARI compared to adjacency-only (0.489 vs.\ 0.554):
-the same-image task is dense enough that even at this weight it occupies a
-non-trivial share of the gradient direction, while contributing too little to
-the encoder for that share to be useful. Around $\lambda \in [1.0, 1.5]$ the
-two losses are roughly balanced and ARI peaks at 0.570 --- a $+0.016$ gain over
-adjacency-only, at the edge of our $\pm 0.04$ noise floor but pointing in the
-direction we expected.
+All five runs in the table are single-seed; the differences in best ARI
+between any two of $\lambda_{\text{same}} \in \{0, 0.5, 1.0, 1.5\}$ are
+within $\sim 1\sigma$ of zero given $\sigma_{\text{seed}} \approx 0.033$.
+The $\lambda_{\text{same}} = 0.1$ point is the only one further from the
+others ($\sim 1.4\sigma$ below the baseline) and could be a bad seed; we do
+not draw conclusions from a single run.
 
-The adjacency AUROC drops slightly (from 0.970 to 0.959) and the AUPRC drops
-more (from 0.443 to 0.328) when same-image is added, because half the gradient
-budget now goes to a different objective. The multi-task model's adjacency
-predictions get worse on the per-edge metrics, but the clustering metric
-improves --- consistent with the model trading per-edge precision for the
-denser same-image signal that spectral clustering can use directly.
+What is more reliable is the systematic shift in adjacency-prediction
+metrics: AUROC drops from $0.970$ to $\sim 0.959$ and AUPRC from $0.443$ to
+$\sim 0.32$ when the same-image head is added, regardless of
+$\lambda_{\text{same}}$. The multi-task model is consistently a slightly
+worse adjacency predictor in exchange for a more task-aligned signal.
+
+To get a defensible answer to the headline question (does multi-task at
+$\lambda_{\text{same}} = 1$ outperform adjacency-only?) we run a follow-up
+experiment with multiple seeds per configuration; see Section 9.5.
 
 \subsection{Ablation: same-image only}
 
@@ -593,20 +605,14 @@ prediction.
 \end{tabular}
 \end{center}
 
-With $\lambda_{\text{adj}} = 0$ the adjacency head receives no gradient at all,
-which is reflected in its AUROC sitting at chance ($0.500$) and AUPRC at the
-positive rate ($0.019$, not shown). On the downstream task the model still
+With $\lambda_{\text{adj}} = 0$ the adjacency head receives no gradient and
+its AUROC sits at chance ($0.500$). On the downstream task the model still
 clusters meaningfully (ARI $0.502$, far above random), so the encoder does
-\emph{not} collapse to a within-image-degenerate solution as we feared was a
-risk. But it does drop $0.07$ ARI compared to the multi-task model and $0.05$
-compared to adjacency-only, both of which are larger than the noise floor.
-
-The takeaway: the adjacency pretext is doing real, measurable representation
-work that same-image alone cannot replicate. The two signals are
-\emph{complementary} --- adjacency provides a fine-grained relational signal
-that prevents the encoder from collapsing within an image; same-image provides
-the dense task-aligned signal that spectral clustering benefits from
-directly. The combination wins.
+not collapse to a within-image-degenerate solution. The same-only ARI is
+$\sim 0.07$ below the multi-task best run and $\sim 0.05$ below
+adjacency-only, both at the borderline of significance ($\sim 1.5\sigma$)
+given a single seed. We test this comparison properly with multiple seeds
+in Section 9.5.
 
 \subsection{Apparent regression from earlier numbers}
 
@@ -638,29 +644,6 @@ itself has no notion of source identity.
 A reliable taxonomy of failure modes would require aggregating misclassified
 fragments across many batches, which we leave as follow-up work.
 
-% ─────────────────────────────────────────────
-\section{Decision Points Summary}
-% ─────────────────────────────────────────────
-
-\begin{center}
-\begin{tabular}{lll}
-\toprule
-\textbf{Decision} & \textbf{Choice} & \textbf{Alternatives considered} \\
-\midrule
-Training objective    & Multi-task: adjacency $+$ same-image     & Adjacency only; same-image only; contrastive \\
-Architecture          & Siamese CNN $+$ two MLP heads            & Single encoder; pretrained encoder \\
-Embedding combination & $[\mathbf{a}-\mathbf{b}\,\|\,\mathbf{a}\odot\mathbf{b}\,\|\,\mathbf{a}\,\|\,\mathbf{b}]$ (InferSent-style) & $[\mathbf{a},\mathbf{b}]$ only (not ablated) \\
-Loss function         & Plain BCE on both heads                  & Weighted BCE (ablated, no gain); focal loss \\
-$\lambda_{\text{same}}$ weight & $1.0$ (equal to adjacency)      & $\{0.1, 0.5, 1.5\}$ ablated; $1.0$ wins \\
-Clustering algorithm  & Balanced spectral clustering             & Plain spectral; $k$-means \\
-Number of clusters    & $k = 10$ (known)                         & Discovered automatically \\
-Cluster size          & Enforced ($G^2 = 16$) via Hungarian      & Free \\
-Eval batches per step & 20 (averaged)                            & 1 (single batch) \\
-Adjacency metrics     & AUROC, AUPRC (threshold-free)            & F1 / precision / recall at fixed threshold \\
-Clustering metrics    & ARI (primary), NMI                       & Purity \\
-\bottomrule
-\end{tabular}
-\end{center}
 
 % ─────────────────────────────────────────────
 \section{Limitations}
