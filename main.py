@@ -81,8 +81,10 @@ def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, lo
         'lambda_same':   cfg.get('lambda_same', 0.0),
         'best_ari':      round(best_ari, 4),
         'iter_at_best':  best_iter,
-        'final_auroc':   last.get('auroc'),
-        'final_auprc':   last.get('auprc'),
+        'final_auroc':       last.get('auroc'),
+        'final_auprc':       last.get('auprc'),
+        'final_same_auroc':  last.get('same_auroc'),
+        'final_same_auprc':  last.get('same_auprc'),
         'final_ari':     last.get('ari'),
         'final_nmi':     last.get('nmi'),
         'duration_min':  round(total_minutes, 1),
@@ -137,8 +139,10 @@ def main():
             n_per_cluster = GRID * GRID if cfg.get('balanced_clustering', False) else None
 
             t0 = time.time()
-            adj_acc = {'auroc': [], 'auprc': []}
-            cl_acc  = {'ari': [], 'nmi': [], 'purity': []}
+            multitask = float(cfg.get('lambda_same', 0.0)) > 0
+            adj_acc  = {'auroc': [], 'auprc': []}
+            same_acc = {'auroc': [], 'auprc': []} if multitask else None
+            cl_acc   = {'ari': [], 'nmi': [], 'purity': []}
             for _ in range(n_eval):
                 val_images, _ = next(val_gen)
                 val_fragments, val_labels = extract_fragments(np.array(val_images))
@@ -148,9 +152,14 @@ def main():
                                             n_per_cluster=n_per_cluster), val_labels)
                 for k in adj_acc: adj_acc[k].append(a[k])
                 for k in cl_acc:  cl_acc[k].append(c[k])
-            adj_metrics = {k: float(np.mean(v)) for k, v in adj_acc.items()}
-            cl_metrics  = {k: float(np.mean(v)) for k, v in cl_acc.items()}
-            eval_time   = time.time() - t0
+                if multitask:
+                    s = model.evaluate_same_image(val_fragments, val_labels)
+                    for k in same_acc: same_acc[k].append(s[k])
+            adj_metrics  = {k: float(np.mean(v)) for k, v in adj_acc.items()}
+            cl_metrics   = {k: float(np.mean(v)) for k, v in cl_acc.items()}
+            same_metrics = ({k: float(np.mean(v)) for k, v in same_acc.items()}
+                            if multitask else None)
+            eval_time    = time.time() - t0
 
             improved = cl_metrics['ari'] > best_ari
             if improved:
@@ -171,13 +180,20 @@ def main():
                 'train_time_s':    round(train_time_acc,           2),
                 'eval_time_s':     round(eval_time,                3),
             }
+            if same_metrics is not None:
+                log_entry['same_auroc'] = round(same_metrics['auroc'], 4)
+                log_entry['same_auprc'] = round(same_metrics['auprc'], 4)
             train_time_acc = 0.0
             log_file.write(json.dumps(log_entry) + '\n')
             log_file.flush()
 
+            same_str = (f"  same_AUROC={same_metrics['auroc']:.3f}"
+                        f"  same_AUPRC={same_metrics['auprc']:.3f}"
+                        if same_metrics is not None else "")
             print(
                 f"iter {iteration+1:5d}  loss={loss:.4f}"
                 f"  AUROC={adj_metrics['auroc']:.3f}  AUPRC={adj_metrics['auprc']:.3f}"
+                f"{same_str}"
                 f"  ARI={cl_metrics['ari']:.3f}  NMI={cl_metrics['nmi']:.3f}"
                 f"  {'*' if improved else ''}"
             )

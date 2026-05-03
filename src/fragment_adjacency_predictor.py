@@ -177,27 +177,46 @@ class FragmentAdjacencyPredictor(BaseModel):
 
         return similarity.cpu().numpy()
 
-    def evaluate_adjacency(self, fragments, adjacency):
-        """
-        Threshold-independent adjacency metrics: AUROC and AUPRC. Both consume
-        the predicted probabilities directly, no cutoff is required.
-
-        AUPRC (average precision) is the more meaningful number on this
-        imbalanced setting (~1.9% positives); AUROC is reported alongside as
-        a sanity check.
-        """
-        from sklearn.metrics import roc_auc_score, average_precision_score
+    def _pair_scores(self, fragments, head):
+        """Return per-pair confidence scores from a given head, plus the upper-
+        triangular index pairs used. Eval mode, no grad."""
         self.encoder.eval()
-        self.adj_head.eval()
-
+        head.eval()
         with torch.no_grad():
             x = self._to_tensor(fragments)
             embeddings = self.encoder(x)
             n = embeddings.shape[0]
             idx_i, idx_j = torch.triu_indices(n, n, offset=1)
-            probs = self.adj_head(embeddings[idx_i], embeddings[idx_j]).cpu().numpy()
+            probs = head(embeddings[idx_i], embeddings[idx_j]).cpu().numpy()
+        return probs, idx_i, idx_j
 
+    def evaluate_adjacency(self, fragments, adjacency):
+        """
+        Threshold-independent adjacency metrics: AUROC and AUPRC, computed on
+        the adjacency head's outputs.
+        """
+        from sklearn.metrics import roc_auc_score, average_precision_score
+        probs, idx_i, idx_j = self._pair_scores(fragments, self.adj_head)
         targets = adjacency[idx_i.cpu(), idx_j.cpu()]
+        return {
+            'auroc': float(roc_auc_score(targets, probs)),
+            'auprc': float(average_precision_score(targets, probs)),
+        }
+
+    def evaluate_same_image(self, fragments, labels):
+        """
+        Threshold-independent same-image metrics: AUROC and AUPRC, computed on
+        the same-image head's outputs. Only valid when the same-image head is
+        active (lambda_same > 0); returns None if the head was never created.
+
+        labels: (N,) array of source-image indices, one per fragment.
+        """
+        from sklearn.metrics import roc_auc_score, average_precision_score
+        if self.same_head is None:
+            return None
+        probs, idx_i, idx_j = self._pair_scores(fragments, self.same_head)
+        labels = np.asarray(labels)
+        targets = (labels[idx_i.cpu().numpy()] == labels[idx_j.cpu().numpy()]).astype(np.float32)
         return {
             'auroc': float(roc_auc_score(targets, probs)),
             'auprc': float(average_precision_score(targets, probs)),
