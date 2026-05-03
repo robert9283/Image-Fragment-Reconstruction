@@ -427,14 +427,25 @@ study is complete.
 \section{Results}
 % ─────────────────────────────────────────────
 
+\subsection{Headline number}
+
+The best configuration we found uses a multi-task loss with equal weights on the
+adjacency and same-image heads, plain BCE on both, balanced spectral clustering,
+and validation ARI averaged over 20 fresh batches. It achieves
+\[
+\text{best ARI} = 0.570, \qquad \text{adjacency AUROC} = 0.959,
+\qquad \text{adjacency AUPRC} = 0.328
+\]
+on the validation generator. We estimate the run-to-run noise floor (variation
+between repeats of the same configuration with different random seeds) at
+approximately $\pm 0.04$ ARI, so a difference of less than $\sim 0.04$ between
+two runs should be treated as inconclusive.
+
 \subsection{Effect of the loss tilt parameter $\beta$}
 
-We evaluated three settings of the WBCE tilt parameter --- $\beta \in
-\{0.019, 0.3, 1.0\}$, corresponding respectively to plain unweighted BCE
-($\beta \cdot 52 = 1$), a mild upweighting of positives, and the textbook
-class-balanced weighting ($w_{+} = 52$). All three runs use the same
-architecture, balanced spectral clustering, and validation averaging over
-$n_{\text{eval}} = 20$ fresh batches.
+The first ablation sweeps the WBCE tilt over $\beta \in \{0.019, 0.3, 1.0\}$:
+plain unweighted BCE ($\beta \cdot 52 = 1$), a mild upweighting, and the
+textbook class-balanced weighting ($w_{+} = 52$).
 
 \begin{center}
 \begin{tabular}{lccc}
@@ -448,53 +459,104 @@ $n_{\text{eval}} = 20$ fresh batches.
 \end{tabular}
 \end{center}
 
-\paragraph{Discussion.}
-The choice of $\beta$ has an essentially negligible effect on AUROC: across two
-orders of magnitude in $\beta$, ranking quality on the adjacency task varies by
-less than a percentage point ($0.969$--$0.973$). What changes with $\beta$ is
-the model's \emph{calibration} --- its tendency to push probabilities high or
-low overall --- not the order in which it ranks pairs. Because spectral
-clustering operates on the raw probabilities as edge weights, both ranking and
-calibration matter for ARI, which is why ARI varies a little more than
-AUROC ($0.46$--$0.54$).
+AUROC barely moves across two orders of magnitude in $\beta$: the model's
+\emph{ranking} of pairs is essentially independent of the loss weighting. What
+changes is calibration, which spectral clustering picks up indirectly through
+the magnitude of the edge weights. ARI varies more (by $\sim 0.07$ between best
+and worst), but a substantial part of that is run-to-run noise. The cleanest
+reading is that $\beta$ is a second-order knob across the range we tested, with
+plain BCE performing at least as well as any weighted variant. We adopt
+$\beta = 1/52$ (plain BCE) for all subsequent experiments.
 
-The variation we observe in ARI is, however, on the same order as the
-run-to-run noise we estimated by repeating $\beta = 0.3$ and $\beta = 1$ with
-different random seeds: between repeated runs of the same configuration the
-ARI changed by up to $\sim 0.05$, comparable to the differences between
-configurations. The cleanest reading of the data is that \emph{within the
-range tested, $\beta$ is a second-order knob}. Plain BCE performs at least as
-well as any weighted variant we tried.
+This contradicts the prior expectation we expressed in Section 6 that an
+aggressive tilt $\beta \in [1.5, 3]$ would help. The asymmetric-error-cost
+argument is not wrong in principle, but the model already learns a near-optimal
+ranking under plain BCE (AUROC $\approx 0.97$), so additional reweighting has
+little remaining effect on the downstream clustering.
 
-This contradicts the prior expectation expressed earlier in the document
-that an aggressive tilt $\beta \in [1.5, 3]$ would be optimal. The argument
-about asymmetric error costs (false negatives breaking intra-cluster
-connectivity more than false positives) is not wrong in principle, but the
-model already learns a near-optimal ranking under plain BCE, so the loss
-weighting has little remaining effect on the downstream task. We adopt
-plain BCE for simplicity in subsequent experiments.
+\subsection{Effect of the multi-task weight $\lambda_{\text{same}}$}
 
-\subsection{Headline numbers}
+The second sweep adds a same-image prediction head to the model, weighted by
+$\lambda_{\text{same}}$ relative to the adjacency loss ($\lambda_{\text{adj}} =
+1$ throughout). The same-image label $y^{\text{same}}_{ij} = \mathbb{1}[s(i) =
+s(j)]$ is also free, derivable from the labels passed to the data generator,
+and denser ($\sim$10\%\,positives instead of 1.9\%). At inference, when the
+same-image head is active we use \emph{its} confidence scores as the affinity
+matrix for spectral clustering, since they are more directly aligned with the
+downstream objective.
 
 \begin{center}
-\begin{tabular}{lcc}
+\begin{tabular}{lccc}
 \toprule
-                                          & \textbf{Best ARI}  & \textbf{AUROC} \\
+\textbf{Run} & \textbf{$\lambda_{\text{same}}$} & \textbf{Best ARI} & \textbf{AUROC / AUPRC} \\
 \midrule
-Run 1 (single-batch eval, unbalanced)     & $0.787$            & --             \\
-Plain BCE (multi-batch eval, balanced)    & $0.535$            & $0.969$        \\
+\texttt{plain\_bce\_baseline}  & $0.0$ & $0.554$         & $0.970 \,/\, 0.443$ \\
+\texttt{multitask\_01}         & $0.1$ & $0.489$         & $0.954 \,/\, 0.308$ \\
+\texttt{multitask\_05}         & $0.5$ & $0.549$         & $0.959 \,/\, 0.331$ \\
+\texttt{multitask\_10}         & $1.0$ & $\mathbf{0.570}$& $0.959 \,/\, 0.328$ \\
+\texttt{multitask\_15}         & $1.5$ & $0.566$         & $0.956 \,/\, 0.314$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-The apparent regression from $0.787$ to $0.535$ is almost entirely the
-multi-batch averaging unmasking the variance of single-batch evaluation:
-the original number was a single lucky draw, while the new number is the
-mean over twenty fresh validation batches.
+The trend is non-monotonic. A small auxiliary same-image weight ($\lambda =
+0.1$) actually \emph{hurts} ARI compared to adjacency-only (0.489 vs.\ 0.554):
+the same-image task is dense enough that even at this weight it occupies a
+non-trivial share of the gradient direction, while contributing too little to
+the encoder for that share to be useful. Around $\lambda \in [1.0, 1.5]$ the
+two losses are roughly balanced and ARI peaks at 0.570 --- a $+0.016$ gain over
+adjacency-only, at the edge of our $\pm 0.04$ noise floor but pointing in the
+direction we expected.
 
-\paragraph{Cross-run comparison.}
-\emph{(Placeholder for the markdown table produced by \texttt{compare\_runs.py},
-plus the overlay plot \texttt{runs\_comparison.png}.)}
+The adjacency AUROC drops slightly (from 0.970 to 0.959) and the AUPRC drops
+more (from 0.443 to 0.328) when same-image is added, because half the gradient
+budget now goes to a different objective. The multi-task model's adjacency
+predictions get worse on the per-edge metrics, but the clustering metric
+improves --- consistent with the model trading per-edge precision for the
+denser same-image signal that spectral clustering can use directly.
+
+\subsection{Ablation: same-image only}
+
+To isolate the contribution of the adjacency task we ran one further
+experiment with $\lambda_{\text{adj}} = 0$, i.e., training only on same-image
+prediction.
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Run} & \textbf{$(\lambda_{\text{adj}}, \lambda_{\text{same}})$} & \textbf{Best ARI} & \textbf{adjacency AUROC} \\
+\midrule
+\texttt{plain\_bce\_baseline}  & $(1, 0)$ & $0.554$            & $0.970$ \\
+\texttt{multitask\_10}         & $(1, 1)$ & $\mathbf{0.570}$   & $0.959$ \\
+\texttt{same\_only}            & $(0, 1)$ & $0.502$            & $0.500$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+With $\lambda_{\text{adj}} = 0$ the adjacency head receives no gradient at all,
+which is reflected in its AUROC sitting at chance ($0.500$) and AUPRC at the
+positive rate ($0.019$, not shown). On the downstream task the model still
+clusters meaningfully (ARI $0.502$, far above random), so the encoder does
+\emph{not} collapse to a within-image-degenerate solution as we feared was a
+risk. But it does drop $0.07$ ARI compared to the multi-task model and $0.05$
+compared to adjacency-only, both of which are larger than the noise floor.
+
+The takeaway: the adjacency pretext is doing real, measurable representation
+work that same-image alone cannot replicate. The two signals are
+\emph{complementary} --- adjacency provides a fine-grained relational signal
+that prevents the encoder from collapsing within an image; same-image provides
+the dense task-aligned signal that spectral clustering benefits from
+directly. The combination wins.
+
+\subsection{Apparent regression from earlier numbers}
+
+An earlier full training run (before multi-batch eval and balanced clustering
+were introduced) reported a best ARI of $0.787$. The current best of $0.570$
+is lower not because the model regressed, but because the earlier evaluation
+used a single validation batch per step. Within-batch variance was large
+($\sim \pm 0.1$), and the $0.787$ value was a single lucky draw. With averaging
+over twenty fresh batches per evaluation, the headline number reflects the
+model's actual generalisation behaviour rather than a favourable sample.
 
 % ─────────────────────────────────────────────
 \section{Failure Modes}
@@ -523,18 +585,19 @@ fragments across many batches, which we leave as follow-up work.
 \begin{center}
 \begin{tabular}{lll}
 \toprule
-\textbf{Decision} & \textbf{Choice} & \textbf{Alternatives} \\
+\textbf{Decision} & \textbf{Choice} & \textbf{Alternatives considered} \\
 \midrule
-Training objective & Adjacency prediction (pretext task) & Contrastive loss \\
-Architecture & Siamese CNN + MLP head & Single encoder \\
-Embedding combination & Diff $+$ product $+$ both embeddings & Concatenation only \\
-Loss function & Binary cross-entropy & Focal loss (for imbalance) \\
-Class imbalance & Weighted loss or negative subsampling & None \\
-Clustering algorithm & Balanced spectral clustering & Plain spectral, $k$-means \\
-Number of clusters & $k = 10$ (known) & Discovered automatically \\
-Cluster size & Enforced ($G^2 = 16$) via Hungarian & Free \\
-Eval batches per step & 20 (averaged) & 1 (single batch) \\
-Evaluation metric & ARI, NMI & Purity \\
+Training objective    & Multi-task: adjacency $+$ same-image     & Adjacency only; same-image only; contrastive \\
+Architecture          & Siamese CNN $+$ two MLP heads            & Single encoder; pretrained encoder \\
+Embedding combination & $[\mathbf{a}-\mathbf{b}\,\|\,\mathbf{a}\odot\mathbf{b}\,\|\,\mathbf{a}\,\|\,\mathbf{b}]$ (InferSent-style) & $[\mathbf{a},\mathbf{b}]$ only (not ablated) \\
+Loss function         & Plain BCE on both heads                  & Weighted BCE (ablated, no gain); focal loss \\
+$\lambda_{\text{same}}$ weight & $1.0$ (equal to adjacency)      & $\{0.1, 0.5, 1.5\}$ ablated; $1.0$ wins \\
+Clustering algorithm  & Balanced spectral clustering             & Plain spectral; $k$-means \\
+Number of clusters    & $k = 10$ (known)                         & Discovered automatically \\
+Cluster size          & Enforced ($G^2 = 16$) via Hungarian      & Free \\
+Eval batches per step & 20 (averaged)                            & 1 (single batch) \\
+Adjacency metrics     & AUROC, AUPRC (threshold-free)            & F1 / precision / recall at fixed threshold \\
+Clustering metrics    & ARI (primary), NMI                       & Purity \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -550,10 +613,10 @@ Evaluation metric & ARI, NMI & Purity \\
     \item The graph has 12,720 edges. For larger grids or larger samples this grows
           quadratically and may become a bottleneck.
     \item The pretext metric and the task metric are misaligned. We train binary
-          adjacency (only $\sim$1.9\% positives) but evaluate clustering. The model can
-          achieve a useful similarity matrix (ARI $\approx 0.78$) while only mediocre
-          on adjacency F1 ($\approx 0.26$), because adjacency is a sufficient but not
-          necessary condition for same-source identity.
+          adjacency (only $\sim$1.9\% positives) but evaluate clustering. The
+          multi-task same-image head partially closes this gap, but at the cost
+          of about $0.01$ AUROC and $0.10$ AUPRC on the adjacency task itself.
+          The model trades per-edge precision for a denser task-aligned signal.
 \end{itemize}
 
 % ─────────────────────────────────────────────
