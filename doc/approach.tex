@@ -480,58 +480,32 @@ into noticeable ARI differences.
 
 \subsection{Performance on the pretext task}
 
-The model is trained to predict adjacency, not to cluster directly. It is
-therefore worth checking how well it actually solves the pretext task, both
-in absolute terms and relative to the much harder downstream task.
-
-The adjacency-only baseline (\texttt{plain\_bce\_baseline}) reaches AUROC
-$= 0.970$ and AUPRC $= 0.443$, and the multi-task best configuration
-(averaged across the 5 seeds in the table above) reaches AUROC
-$= 0.954$ and AUPRC $= 0.314$. The AUROC value can be read directly: given a
-random adjacent pair and a random non-adjacent pair, the model assigns the
-adjacent one a higher confidence score $\sim 95\%$\,--\,$97\%$ of the time.
-AUPRC is on the order of $20\times$ the random baseline of $0.019$ (the
-positive rate); the top-ranked pairs are almost all true adjacencies. By
-any reasonable standard the model has \emph{nearly solved} the binary
-pretext task.
-
-By contrast, the downstream clustering ARI is $0.554$ on the same checkpoint
-and run --- well above random ($0.0$) and meaningful, but far from perfect.
-The gap is real and instructive: adjacency-prediction quality sits within a
-few percentage points of its ceiling, while clustering quality is held back
-by something the pretext metric does not capture (intrinsic ambiguity in
-near-uniform fragments, repetitive textures, and so on; see Section~10 on
-failure modes).
-
-When we add the same-image head and increase $\lambda_{\text{same}}$ from $0$
-to $1$, adjacency AUROC drops slightly (from $0.970$ to $0.959$) and AUPRC
-drops more (from $0.443$ to $0.328$). The model becomes a slightly worse
-adjacency predictor in exchange for a denser, more task-aligned signal, and
-trades a $\sim 0.011$ AUROC for a $+0.016$ ARI. The trade-off is consistent
-with the intuition that pretext-task quality is no longer the binding
-constraint at this point.
+Across all configurations tested, AUROC sits in the range $0.95$--$0.97$ and
+AUPRC is on the order of $20\times$ the random baseline of $0.019$. Given a
+random adjacent pair and a random non-adjacent pair, the model ranks the
+adjacent one higher $\sim 95$--$97\%$ of the time; the top-ranked pairs are
+almost all true adjacencies. By any reasonable standard the model has
+\emph{nearly solved} the binary pretext task, and this holds regardless of
+the loss configuration (see Sections~9.3--9.4 for the per-hyperparameter
+breakdown). Downstream clustering ARI is meaningful but lower; representative
+failure cases are discussed in Section~10.
 
 \input{fig_roc_curves.tex}
 
-Figure~\ref{fig:roc-curves} shows the corresponding ROC and precision-recall
-curves. The ROC corner sits well into the top-left, consistent with the
-high AUROC; the precision-recall curve drops more steeply, reflecting how
-hard it is to maintain precision on a problem with only $\sim 1.9\%$
-positives.
+Figure~\ref{fig:roc-curves} shows the ROC and precision-recall curves for the
+best checkpoint. The ROC corner sits well into the top-left, consistent with
+the high AUROC; the precision-recall curve drops more steeply, reflecting the
+low positive rate of $\sim 1.9\%$.
 
 \input{fig_weight_distribution.tex}
 
-To understand \emph{how} the model assigns confidence,
-Figure~\ref{fig:weight-distribution} shows the score distribution
-broken down by the true class of each pair. Three regimes are visible:
-cross-image pairs are concentrated near zero, strictly adjacent pairs
-peak around $0.7$--$0.85$, and same-image-but-not-adjacent pairs sit
-in the middle and span the whole $[0, 1]$ range. The model has therefore
-implicitly learned a softer notion than strict adjacency: a graded
-\emph{same-source} signal, with adjacency at its high end. This is what
-the spectral clustering step ultimately consumes, and it is what makes
-the gap between the binary pretext metric and the downstream ARI both
-expected and informative.
+Figure~\ref{fig:weight-distribution} shows the score distribution broken down
+by true pair class. Three regimes are visible: cross-image pairs concentrate
+near zero, strictly adjacent pairs peak around $0.7$--$0.85$, and
+same-image-but-not-adjacent pairs span the full $[0, 1]$ range. The model has
+implicitly learned a graded \emph{same-source} signal rather than a strict
+binary adjacency predictor, which is precisely what the downstream spectral
+clustering step consumes.
 
 \subsection{Effect of the loss tilt parameter $\beta$}
 
