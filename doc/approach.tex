@@ -512,10 +512,13 @@ clustering step consumes.
 
 \subsection{Effect of the loss tilt parameter $\beta$}
 
-The first ablation sweeps the WBCE tilt $\beta$ (Section~\ref{sec:loss},
-Equation~\eqref{eq:wbce}) over $\beta \in \{0.019, 0.3, 1.0\}$:
-plain unweighted BCE ($\beta \cdot 52 = 1$), a mild upweighting, and the
-textbook class-balanced weighting ($w_{+} = 52$).
+This ablation varies $\beta_{\text{adj}}$ (Section~\ref{sec:loss},
+Equation~\eqref{eq:wbce}) over $\{0.019, 0.3, 1.0\}$ while holding all
+other settings fixed: adjacency head only ($\lambda_{\text{adj}} = 1$,
+$\lambda_{\text{same}} = 0$, so $\beta_{\text{same}}$ is not used), single
+seed, and the standard training budget. The three values correspond to plain
+unweighted BCE ($\beta_{\text{adj}} \cdot 52 = 1$), a mild upweighting, and
+the textbook class-balanced weighting ($w_{+} = 52$).
 
 \begin{center}
 \begin{tabular}{lccc}
