@@ -260,7 +260,7 @@ similarity matrix for spectral clustering. The choice of weights is ablated
 in Section~9.4.
 
 The two signals are complementary in the sense documented by the
-same-image-only ablation in Section~9.5: adjacency provides a fine-grained
+same-image-only results in Section~9.5: adjacency provides a fine-grained
 relational signal that prevents the encoder from collapsing within an image,
 while same-image provides the dense task-aligned signal that the clustering
 step actually consumes.
@@ -437,7 +437,7 @@ A full training run completes in approximately 20--25 minutes on this hardware.
           \texttt{config.yaml} (calling \texttt{torch.manual\_seed} and
           \texttt{np.random.seed} at startup). When \texttt{seed} is omitted the
           run is unseeded, giving the natural run-to-run variance. All ANOVA
-          replicates in Section~9.6 use explicit seeds $\{0,1,2,3,4\}$.
+          replicates in Section~9.5 use explicit seeds $\{0,1,2,3,4\}$.
     \item Hyperparameters and run metadata are versioned in \texttt{config.yaml}.
 \end{itemize}
 
@@ -578,34 +578,8 @@ worse adjacency predictor in exchange for a more task-aligned signal.
 
 To get a defensible answer to the headline question (does multi-task at
 $\lambda_{\text{same}} = 1$ outperform adjacency-only?) we run a follow-up
-experiment with multiple seeds per configuration; see Section 9.6.
+experiment with multiple seeds per configuration; see Section 9.5.
 
-\subsection{Ablation: same-image only}
-
-To isolate the contribution of the adjacency task we ran one further
-experiment with $\lambda_{\text{adj}} = 0$, i.e., training only on same-image
-prediction.
-
-\begin{center}
-\begin{tabular}{lccc}
-\toprule
-\textbf{Run} & \textbf{$(\lambda_{\text{adj}}, \lambda_{\text{same}})$} & \textbf{Best ARI} & \textbf{adjacency AUROC} \\
-\midrule
-\texttt{plain\_bce\_baseline}  & $(1, 0)$ & $0.554$            & $0.970$ \\
-\texttt{multitask\_10}         & $(1, 1)$ & $\mathbf{0.570}$   & $0.959$ \\
-\texttt{same\_only}            & $(0, 1)$ & $0.502$            & $0.500$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-With $\lambda_{\text{adj}} = 0$ the adjacency head receives no gradient and
-its AUROC sits at chance ($0.500$). On the downstream task the model still
-clusters meaningfully (ARI $0.502$, far above random), so the encoder does
-not collapse to a within-image-degenerate solution. The same-only ARI is
-$\sim 0.07$ below the multi-task best run and $\sim 0.05$ below
-adjacency-only, both at the borderline of significance ($\sim 1.5\sigma$)
-given a single seed. We test this comparison properly with multiple seeds
-in Section 9.6.
 
 \subsection{Multi-seed ANOVA: adj-only vs multi-task vs same-only}
 
@@ -657,8 +631,13 @@ adj-only vs same-only   & $0.49$ & $0.636$ \\
 None of the comparisons approach significance at any conventional level. The three
 configurations produce indistinguishable downstream clustering across the seeds tested.
 
-The null result is consistent with two observations from the single-seed sweeps. First,
-adjacency AUROC is already near-saturated ($\sim 0.97$) for all configurations that
+As a sanity check: for same-only, the adjacency head receives no gradient and its AUROC
+sits at chance ($0.500 \pm 0.000$ across all five seeds), confirming the head is
+untrained. Despite this, the encoder still clusters meaningfully (mean ARI $0.531$),
+showing it does not collapse when trained on same-image supervision alone.
+
+The null result is consistent with two observations. First,
+adjacency AUROC is near-saturated ($\sim 0.97$) for all configurations that
 include the adjacency head, so the binding constraint on downstream ARI is not the
 quality of the pretext-task signal but factors the model cannot overcome --- near-uniform
 fragments, repeated textures, and the fundamental difficulty of a purely local
