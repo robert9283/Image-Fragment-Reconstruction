@@ -1,46 +1,31 @@
 # Open work items
 
-## Waiting for overnight runs to finish
-
-- Run R ANOVA analysis: `Rscript scripts/anova_r.R`
-- Run final test evaluation: `bash scripts/run_test_eval.sh <best_run_name>`
-- Delete stale runs (pre-refactor, lambda_sweep single-seed): `multitask_01`, `multitask_05`,
-  `multitask_10`, `multitask_15`, `same_only`, `noise_seed_0..4`, `test_single_head`,
-  `test_single_head_full` — check `scripts/runs_after_refactor.md` for full list
-
 ## Submission
 
-- Create a GitHub release on `main` with the best `model.pt` and its `config.yaml` attached
-  as release assets (`gh release create`). Pick the best run after overnight ANOVA finishes.
+- Create a GitHub release on `main` with `runs/multitask_10_seed_2/model.pt` and
+  `runs/multitask_10_seed_2/config.yaml` as release assets (`gh release create`)
+- Push final state to remote and open PR / merge to `main`
 
-## doc/report_long.tex (detailed writeup)
+## doc/report_long.tex
 
-- §9.2 Hyperparameter optimisation: fill in `\hat{\sigma}` and `\Delta_{\min}` from R script output
-- §9.2 Hyperparameter optimisation: fill in ANOVA table with actual results (from `doc/tab_anova_*.tex`)
-- §9.X Final test evaluation: fill in best run name, config, and test metrics table
-- Replace old sections §9.3–§9.6 (single-seed lambda sweep + old ANOVA) with the new
-  unified ANOVA results from `doc/tab_anova_*.tex` — these sections are pre-refactor and will be deleted
-- Regenerate Figure 5 "Distribution of per-pair confidence scores" with new single-head
-  checkpoint: `python scripts/weight_distribution.py` — then recompile tex
-- Check all cross-references and section numbers are still consistent after section restructure
-
-## doc/report.tex (3-page submission report)
-
-- §3 Evaluation Results: fill in ANOVA table (Table 1) from R script output
-- §3 Test results: fill in ARI/NMI/purity/F1 from `runs/<best_run>/test_metrics.json`
-- Verify final PDF is ≤ 3 pages after filling in results
+- Regenerate Figure 5 "Distribution of per-pair confidence scores" with the
+  current best checkpoint: `python scripts/weight_distribution.py` — then recompile
+- Cross-reference / section number check after the §9.3–9.5 deletion
 
 ## Housekeeping
 
-- `run.sh`: pipeline script (train → script1 → script2) — check comments are still accurate
-  and that it works end-to-end with the updated scripts
-- refactoring: the folder to-share with its content can be moved to the src folder. Afterwards check that the code dependencies and that everything still runs
-- refactoring: the folder name debug is not so good. can you replace it by something more appropriate. Also afterwards check that this didnt imapct anything else. If necessary update the Readme.md
+- Delete stale run folders (untracked, pre-refactor): `multitask_01`, `multitask_05`,
+  `multitask_10`, `multitask_15`, `same_only`, `noise_seed_0..4`, `test_single_head`,
+  `test_single_head_full`, `balanced_multibatch`, `plain_bce`, `plain_bce_baseline`,
+  `wbce_beta_03`, `wbce_beta_1`
+- `run.sh`: check comments are still accurate end-to-end
+- Refactoring: rename `debug/` folder to something more appropriate; update README
+- Refactoring: move `to_share/` into `src/`; check all imports still work
 
 ## Optional / lower priority
 
 - Ablate comparison-head input (3 runs, ~75 min): current 4-term `[a-b, a*b, a, b]`
-  vs plain `[a, b]` vs `[a-b, a*b]` — tests whether InferSent combination helps on images
+  vs plain `[a, b]` vs `[a-b, a*b]`
 
 
 ## Done
