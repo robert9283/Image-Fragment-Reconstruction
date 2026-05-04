@@ -7,24 +7,18 @@
   This will tell us whether the InferSent four-term construction actually helps
   on images or whether a simpler combination is just as good. ~75 min of
   training time total.
-- Add a purity column to the multi-task sweep table (the largest table, where
-  it's most informative). Currently purity is only logged in per-eval log
-  entries, not in the per-run summary in results.jsonl. Adding a
-  `final_purity` field to the summary is a one-line change in main.py;
-  picking it up in the table is another one-liner.
-- After tonight's ANOVA runs finish, write up Section 9.5 (multi-seed comparison
-  with t-tests) and update the headline numbers in Section 9.1 to use the
-  proper means.
-- clean the git up a bit and make it submission ready. Remember this task is
-  for a job interview. Everything should be concise, clean and easy to
-  understand for someone that is not familiar with the code. After
-  submission they will need to run the pipeline to generate the model file.
-  It should be clear how the models are generated and how the report was
-  generated.
-- in the further suggestions section can you remove the paragraph "Differentiable surrogate for ARI."
 
 ## Done
 
+- Section 9.6 written: multi-seed ANOVA comparing adj-only vs multi-task vs
+  same-only (5 seeds each). Welch t-tests show no significant differences
+  (p > 0.6 for all pairs). Section 9.1 headline numbers already used proper
+  means; reproducibility paragraph updated to describe the seed config knob.
+- Git cleanup: .gitignore suppresses LaTeX artifacts, debug reports, run logs,
+  to_share/data/, and assignment PDF. Submission scripts now default
+  CHECKPOINT_PATH to runs/latest/model. All ANOVA run configs tracked.
+- `final_purity` added to per-run summary in results.jsonl and compare_runs.py.
+- "Differentiable surrogate for ARI" paragraph removed from Further Suggestions.
 - Weighted BCE bug fixed (`BCELoss(reduction='none')`, then weight, then mean).
 - `n_neg / n_pos` is computed once from `(n_images, GRID)` in `main.n_neg_over_n_pos`
   and passed into the model as `pos_weight = beta * ratio`. Tilt parameter `beta`
