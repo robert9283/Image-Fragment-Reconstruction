@@ -10,6 +10,8 @@
 \usepackage[backend=biber, style=authoryear]{biblatex}
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta,fit}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
 
 \geometry{margin=2.5cm}
 \addbibresource{references.bib}
@@ -117,7 +119,7 @@ inference.
 
 \begin{figure}[h]
 \centering
-\input{fig_architecture.tex}
+\input{figures/fig_architecture.tex}
 \caption{Schematic of the model. The CNN encoder is applied with shared weights
 to each of two input fragments; its $256$-dimensional embeddings are combined into a
 single $1024$-dimensional vector via concatenation of difference, element-wise
@@ -192,7 +194,7 @@ grid positions and requires no human annotation
 
 \begin{figure}[h]
 \centering
-\input{fig_grid_labels.tex}
+\input{figures/fig_grid_labels.tex}
 \caption{Adjacency labelling within a single source image. Each of the 16
 fragments is connected by a red edge to each of its grid neighbours. The
 24 highlighted edges are the positive pairs ($y_{ij} = 1$); all other pairs
@@ -304,7 +306,7 @@ originate from the same image (Figure~\ref{fig:similarity-graph}).
 
 \begin{figure}[h]
 \centering
-\input{fig_similarity_graph.tex}
+\input{figures/fig_similarity_graph.tex}
 \caption{Schematic of the predicted similarity graph. Each node is a fragment; edge
 weight $p_{ij}$ is the model's confidence that the two fragments are adjacent.
 Edges within a true source image (here, two illustrative source images shown in blue
@@ -580,14 +582,14 @@ the loss configuration (see Sections~9.3--9.4 for the per-hyperparameter
 breakdown). Downstream clustering ARI is meaningful but lower; representative
 failure cases are discussed in Section~10.
 
-\input{fig_roc_curves.tex}
+\input{figures/fig_roc_curves.tex}
 
 Figure~\ref{fig:roc-curves} shows the ROC and precision-recall curves for the
 best checkpoint. The ROC corner sits well into the top-left, consistent with
 the high AUROC; the precision-recall curve drops more steeply, reflecting the
 low positive rate of $\sim 1.9\%$.
 
-\input{fig_weight_distribution.tex}
+\input{figures/fig_weight_distribution.tex}
 
 Figure~\ref{fig:weight-distribution} shows the score distribution broken down
 by true pair class. Three regimes are visible: cross-image pairs concentrate
@@ -788,7 +790,7 @@ fragments form the plurality of the cluster the misclassified fragment was
 assigned to. The matching is per-batch and uses the true labels; the model
 itself has no notion of source identity.
 
-\input{fig_failure_modes.tex}
+\input{figures/fig_failure_modes.tex}
 
 A reliable taxonomy of failure modes would require aggregating misclassified
 fragments across many batches, which we leave as follow-up work.
