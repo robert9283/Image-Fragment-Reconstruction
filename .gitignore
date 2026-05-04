@@ -2,17 +2,43 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
+
+# LaTeX build artifacts
+doc/*.aux
+doc/*.bbl
+doc/*.bcf
+doc/*.blg
+doc/*.log
+doc/*.out
+doc/*.run.xml
+doc/*.toc
+
+# debug generated outputs
 debug/out_*.png
+debug/report.tex
+debug/report.pdf
+
+# per-run artifacts: ignore checkpoints and logs, but keep configs
+runs/*/model.pt
+runs/*/training_log.jsonl
+runs/latest
+runs/*.log
+
+# stray top-level logs
+*.log
+runs_comparison.png
+
+# checkpoints dir (old location)
 checkpoints/
+
+# misc generated outputs
 training_log.jsonl
 results.json
 src/clustering_visualisation.png
 
-# per-run artifacts: ignore large checkpoints and logs, but keep config + notes
-runs/*/model.pt
-runs/*/training_log.jsonl
-runs/latest
-runs_comparison.png
+# data and assignment (provided externally)
+to_share/data/
+to_share/Case\ Study\ Assignment.pdf
 
 # private summary, kept locally but not committed
 doc/summary.tex

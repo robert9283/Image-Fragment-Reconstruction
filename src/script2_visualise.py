@@ -19,7 +19,7 @@ from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
 
 # ── edit these two paths ──────────────────────────────────────────────────────
 DATA_PATH       = os.path.join(os.path.dirname(__file__), '..', 'to_share', 'data')
-CHECKPOINT_PATH = os.path.join(os.path.dirname(__file__), '..', 'checkpoints', 'model')
+CHECKPOINT_PATH = os.path.join(os.path.dirname(__file__), '..', 'runs', 'latest', 'model')
 # ─────────────────────────────────────────────────────────────────────────────
 
 N_IMAGES = 10
