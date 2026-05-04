@@ -36,20 +36,16 @@ the spatial dimensions from $16{\times}16$ to $4{\times}4$; a linear layer
 projects the flattened features to 256-d (ReLU + dropout $p=0.3$).
 
 \paragraph{Comparison head.}
-Inspired by InferSent~\cite{infersent2017}, the head takes the
+Inspired by InferSent \cite{infersent2017}, the head takes the
 1024-dimensional vector
 $[\mathbf{a}-\mathbf{b}\;\|\;\mathbf{a}\odot\mathbf{b}\;\|\;\mathbf{a}\;\|\;\mathbf{b}]$
-as input, passes it through one hidden layer (ReLU), and produces a single
-scalar via sigmoid. Using the difference and Hadamard product alongside the
-raw embeddings gives the head explicit access to asymmetric relational
-features at no additional encoder cost.
+as input and produces a scalar confidence score via one hidden layer (ReLU).
 
 \paragraph{Why Siamese?}
 Weight sharing ensures the comparison is symmetric and forces the encoder to
 learn a universal fragment representation rather than one tied to a specific
-input slot. The pairwise architecture avoids the need for any image-level
-label: the only supervision required is whether two fragments are adjacent,
-which is derivable from the grid structure alone.
+input slot. No image-level labels are needed: the only supervision is whether two
+fragments are adjacent, which follows directly from their grid positions.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section*{2. Training Strategy}
@@ -60,10 +56,11 @@ The model is trained to predict spatial adjacency: $y_{ij}=1$ iff fragments
 $i$ and $j$ are grid-neighbours within the same image. With $N=10$ images on
 a $4{\times}4$ grid, the negative-to-positive ratio is exactly
 $12{,}480/240 = 52$. We use weighted BCE with tilt parameter $\beta$:
-\[
-  \mathcal{L}_{\text{WBCE}}(\beta) = -\tfrac{1}{N}\textstyle\sum_{(i,j)}
-  \bigl[\beta\cdot 52\, y_{ij}\log p_{ij} + (1-y_{ij})\log(1-p_{ij})\bigr].
-\]
+\begin{align*}
+  \mathcal{L}_{\text{WBCE}}(\beta) = -\tfrac{1}{N}\!\sum_{(i,j)}\bigl[
+  &\beta\cdot 52\; y_{ij}\log p_{ij} \\
+  &+ (1-y_{ij})\log(1-p_{ij})\bigr].
+\end{align*}
 
 \paragraph{Multi-task loss.}
 Adjacency is a local signal; the downstream task is global clustering.
@@ -131,9 +128,8 @@ adjacency F1\,=\,TODO.
 
 \paragraph{Pretext task.}
 Adjacency AUROC sits at $0.95$--$0.97$ across all configurations, indicating
-the model has nearly solved the binary pretext task. The remaining gap to
-perfect clustering is attributed to fragments with near-uniform colour or
-repetitive texture that look similar across different source images.
+the model has nearly solved the binary pretext task. The remaining gap to perfect clustering is consistent with the
+fragment-ambiguity cases discussed in Section~4.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section*{4. Challenges and Improvements}
@@ -152,9 +148,9 @@ at this scale, suggesting the binding constraint is fragment ambiguity rather
 than the loss formulation.
 
 \paragraph{Fragment ambiguity.}
-Uniform-colour or repetitive-texture patches yield near-identical embeddings
-regardless of source, fundamentally limiting the achievable ARI for any
-pairwise model without global context.
+The failure-modes analysis shows that near-uniform or repetitive-texture
+patches produce similar embeddings regardless of source image, and are
+frequently mis-assigned.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section*{5. Next Steps}
