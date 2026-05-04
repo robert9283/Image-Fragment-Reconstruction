@@ -21,6 +21,22 @@ caffeinate -i bash scripts/run_overnight.sh    # run all pending; Ctrl-C stops a
 On resume, already-`done` runs are skipped automatically. After all runs finish,
 `compare_runs.py` and `anova_analysis.py` run automatically.
 
+## Final test evaluation
+
+After the ANOVA is complete and the best run has been identified, run the
+test evaluation on its checkpoint:
+
+```bash
+bash scripts/run_test_eval.sh <run_name>
+# e.g. bash scripts/run_test_eval.sh multitask_10_seed_2
+```
+
+Results are saved to `runs/<run_name>/test_metrics.json` (co-located with
+the checkpoint). This runs 1000 test batches and reports ARI, NMI, purity,
+and adjacency precision/recall/F1.
+
+## R analysis
+
 Once all 20 ANOVA runs are done, run the R analysis:
 
 ```bash

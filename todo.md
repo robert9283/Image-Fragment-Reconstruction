@@ -1,33 +1,34 @@
 # Open work items
 
-- optional: ablate the comparison-head input. Three runs at otherwise-identical settings:
-    - Run 1: current four-term combination `[a-b, a*b, a, b]` (1024-dim head)
-    - Run 2: plain concatenation `[a, b]` only (512-dim head)
-    - Run 3: difference + product `[a-b, a*b]` only (512-dim head)
-  This will tell us whether the InferSent four-term construction actually helps
-  on images or whether a simpler combination is just as good. ~75 min of
-  training time total.
+## Waiting for overnight runs to finish
 
-- In section 9.2 "Performance on the pretext task" the following part sounds very unprofessional. Please shorten that. The intrinsic ambiguity part I dont understand just skip it bu you can forward o to the failure modes. "By contrast, the downstream clustering ARI is 0.554 on the same checkpoint and
-run — well above random (0.0) and meaningful, but far from perfect. The gap is real
-and instructive: adjacency-prediction quality sits within a few percentage points of its
-ceiling, while clustering quality is held back by something the pretext metric does not
-capture (intrinsic ambiguity in near-uniform fragments, repetitive textures, and so on;
-see Section 10 on failure modes)."
+- Run R ANOVA analysis: `Rscript scripts/anova_r.R`
+- Run final test evaluation: `bash scripts/run_test_eval.sh <best_run_name>`
+- Delete stale runs (pre-refactor, lambda_sweep single-seed): `multitask_01`, `multitask_05`,
+  `multitask_10`, `multitask_15`, `same_only`, `noise_seed_0..4`, `test_single_head`,
+  `test_single_head_full` — check `scripts/runs_after_refactor.md` for full list
 
-- In section 9.2 "Performance on the pretext task" in the part "When we add the same-image head and increase λsame from 0 to 1, adjacency AUROC
-drops slightly (from 0.970 to 0.959) and AUPRC drops more (from 0.443 to 0.328). The
-model becomes a slightly worse adjacency predictor in exchange for a denser, more task-
-aligned signal, and trades a∼0.011 AUROC for a +0.016 ARI. The trade-off is consistent
-with the intuition that pretext-task quality is no longer the binding constraint at this
-point." please double check that this difference in performance was stat. significant. I am now confused where we did anova and where not.
+## doc/approach.tex (detailed writeup)
 
-- in section "9.4 Effect of the multi-task weight" when you introduce y_ij^^same could you use in latex a case environment to have the notation a bit cleaner.
+- §9.2 Hyperparameter optimisation: fill in `\hat{\sigma}` and `\Delta_{\min}` from R script output
+- §9.2 Hyperparameter optimisation: fill in ANOVA table with actual results (from `doc/tab_anova_*.tex`)
+- §9.X Final test evaluation: fill in best run name, config, and test metrics table
+- Replace old sections §9.3–§9.6 (single-seed lambda sweep + old ANOVA) with the new
+  unified ANOVA results from `doc/tab_anova_*.tex` — these sections are pre-refactor and will be deleted
+- Regenerate Figure 5 "Distribution of per-pair confidence scores" with new single-head
+  checkpoint: `python scripts/weight_distribution.py` — then recompile tex
+- Check all cross-references and section numbers are still consistent after section restructure
 
-- currently the result section refers to the results on the training dataset. This should be made clear. We also need to run the final model on the test dataset and write a subsection for that.
-- in section "5.4 Validation: multi-batch averaging" make a forward reference since we did not introduce the metrics for validation there yet.
+## doc/report.tex (3-page submission report)
 
-- fig Figure 5: "Distribution of the model’s per-pair confidence scores" needs to be omitted or changed since we changed to one-head code
+- §3 Evaluation Results: fill in ANOVA table (Table 1) from R script output
+- §3 Test results: fill in ARI/NMI/purity/F1 from `runs/<best_run>/test_metrics.json`
+- Verify final PDF is ≤ 3 pages after filling in results
+
+## Optional / lower priority
+
+- Ablate comparison-head input (3 runs, ~75 min): current 4-term `[a-b, a*b, a, b]`
+  vs plain `[a, b]` vs `[a-b, a*b]` — tests whether InferSent combination helps on images
 
 
 ## Done

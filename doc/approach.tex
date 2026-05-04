@@ -170,6 +170,11 @@ p_{ij} = \sigma\!\bigl(W_2\,\text{ReLU}(W_1\,\mathbf{z}_{ij} + b_1) + b_2\bigr).
 \section{Training}
 % ─────────────────────────────────────────────
 
+The training set consists of $1{,}281{,}167$ images from ImageNet-64. Each
+training step samples 10 images independently and uniformly at random,
+so the data generator is effectively infinite and no epoch structure is
+imposed.
+
 \subsection{Constructing Training Labels}
 
 From a sample of 10 images cut into a 4$\times$4 grid, each fragment has at most 4
@@ -239,7 +244,7 @@ how well any model trained purely on adjacency can do.
 The natural fix is to add a second loss term on a denser, more task-aligned
 signal: same-image membership. The label
 \[
-y^{\text{same}}_{ij} = \mathbb{1}\bigl[s(i) = s(j)\bigr]
+y^{\text{same}}_{ij} = \begin{cases} 1 & \text{if } s(i) = s(j) \\ 0 & \text{otherwise} \end{cases}
 \]
 is also free, derivable from the labels passed to the data generator, and has
 a $\sim 10\%$ positive rate (versus $1.9\%$ for adjacency). Both terms act on
@@ -276,8 +281,8 @@ Each validation step samples a fresh batch of 10 source images from the test
 generator. Individual batches vary substantially in difficulty (some draws of
 10 ImageNet classes are visually well-separated, others contain
 near-duplicates), so a single-batch ARI estimate has high variance. We
-average each downstream metric (ARI, NMI; see Section 7 for definitions) and
-each pretext-task metric (AUROC, AUPRC) over $n_{\text{eval}} = 20$ fresh
+average each downstream metric (ARI, NMI; formally defined in Section~7)
+and each pretext-task metric (AUROC, AUPRC) over $n_{\text{eval}} = 20$ fresh
 validation batches per evaluation step. This stabilises the training
 curves, and --- more importantly --- the early-stopping decision and the
 checkpoint-selection criterion, which would otherwise be biased toward
@@ -448,6 +453,12 @@ study is complete.
 % ─────────────────────────────────────────────
 \section{Results}
 % ─────────────────────────────────────────────
+
+Unless stated otherwise, all results in this section are reported on
+\textbf{validation data}: batches drawn from the held-out test split of
+ImageNet-64 that the model never trains on, but which are used for
+early stopping and checkpoint selection. A final unbiased evaluation on
+independent test batches is reported in Section~\ref{sec:test-eval}.
 
 \subsection{Headline number and run-to-run noise}
 
@@ -730,6 +741,37 @@ the default because it has the highest mean ARI and the highest single-seed peak
 caution that the advantage is not statistically supported with $n = 5$ seeds; a larger
 seed sweep would be needed to confirm it.
 
+
+\subsection{Final test evaluation}
+\label{sec:test-eval}
+
+% TODO: fill in once overnight runs complete and best configuration is chosen.
+% Run: bash scripts/run_test_eval.sh <best_run_name>
+% Results saved to runs/<best_run_name>/test_metrics.json
+
+The results above were obtained on validation batches used for checkpoint
+selection and are therefore subject to a mild selection bias. To obtain an
+unbiased estimate, we evaluated the best checkpoint from the ANOVA on
+$1000$ independently sampled test batches. The test split contains $5{,}000$
+images; with batches of 10 images each image appears on average twice across
+the 1000 batches, so the evaluation is not fully independent at the image
+level, though each batch presents a distinct clustering problem. The chosen
+run was \texttt{TODO} ($\lambda_{\text{adj}} = \text{TODO}$,
+$\lambda_{\text{same}} = \text{TODO}$, $\beta = \text{TODO}$,
+seed $= \text{TODO}$).
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Mean} & \textbf{Std} \\
+\midrule
+ARI     & TODO & TODO \\
+NMI     & TODO & TODO \\
+Purity  & TODO & TODO \\
+Adj.\ F1 & TODO & TODO \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 % ─────────────────────────────────────────────
 \section{Failure Modes}

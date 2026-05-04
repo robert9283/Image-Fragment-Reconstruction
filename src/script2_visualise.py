@@ -7,6 +7,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'to_share', 'src'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+import yaml
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -18,21 +19,36 @@ from src.clustering import cluster, compute_metrics
 from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
 
 # ── edit these two paths ──────────────────────────────────────────────────────
-DATA_PATH       = os.path.join(os.path.dirname(__file__), '..', 'to_share', 'data')
-CHECKPOINT_PATH = os.path.join(os.path.dirname(__file__), '..', 'runs', 'latest', 'model')
+DATA_PATH       = os.environ.get('DATA_PATH',
+                    os.path.join(os.path.dirname(__file__), '..', 'to_share', 'data'))
+CHECKPOINT_PATH = os.environ.get('CHECKPOINT_PATH',
+                    os.path.join(os.path.dirname(__file__), '..', 'runs', 'latest', 'model'))
 # ─────────────────────────────────────────────────────────────────────────────
 
-N_IMAGES = 10
+# config is read from the run directory (parent of checkpoint path)
+RUN_DIR = os.path.dirname(os.path.realpath(CHECKPOINT_PATH))
+with open(os.path.join(RUN_DIR, 'config.yaml')) as f:
+    cfg = yaml.safe_load(f)
+
+N_IMAGES = cfg.get('n_images', 10)
+
+n_pos   = N_IMAGES * 2 * GRID * (GRID - 1)
+n_pairs = (N_IMAGES * GRID**2) * (N_IMAGES * GRID**2 - 1) // 2
+ratio   = (n_pairs - n_pos) / n_pos
 
 dataset = Imagenet64(DATA_PATH)
 gen     = dataset.datagen_cls(batch_size=N_IMAGES, ds='test', augmentation=False)
 images, _ = next(gen)
 fragments, true_labels = extract_fragments(np.array(images))
 
-model = FragmentAdjacencyPredictor()
+model = FragmentAdjacencyPredictor(
+    pos_weight_adj = cfg.get('beta', 0.01923) * ratio,
+    lambda_adj     = cfg.get('lambda_adj',  1.0),
+    lambda_same    = cfg.get('lambda_same', 0.0),
+)
 model.load(CHECKPOINT_PATH)
 model_output = model.get_output(fragments)
-pred_labels  = cluster(model_output)
+pred_labels  = cluster(model_output, n_per_cluster=GRID * GRID)
 metrics      = compute_metrics(pred_labels, true_labels)
 
 print(f"ARI={metrics['ari']:.3f}  NMI={metrics['nmi']:.3f}  purity={metrics['purity']:.3f}")
