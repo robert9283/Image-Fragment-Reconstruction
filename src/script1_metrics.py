@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import json
 import yaml
 import numpy as np
+from sklearn.metrics import f1_score
 from data import Imagenet64
 from src.fragments import extract_fragments, build_adjacency, GRID
 from src.clustering import cluster, compute_metrics
@@ -47,7 +48,7 @@ model = FragmentAdjacencyPredictor(
 model.load(CHECKPOINT_PATH)
 print(f"Loaded checkpoint from {CHECKPOINT_PATH}")
 
-adjacency_results  = {'precision': [], 'recall': [], 'f1': []}
+adjacency_results  = {'auroc': [], 'auprc': [], 'f1': []}
 clustering_results = {'ari': [], 'nmi': [], 'purity': []}
 
 for i in range(N_SAMPLES):
@@ -57,8 +58,12 @@ for i in range(N_SAMPLES):
 
     # ── adjacency prediction ──────────────────────────────────────────────────
     adj_metrics = model.evaluate_adjacency(fragments, adjacency)
-    for key, val in adj_metrics.items():
-        adjacency_results[key].append(val)
+    probs, idx_i, idx_j = model._pair_scores(fragments)
+    targets = adjacency[idx_i.cpu().numpy(), idx_j.cpu().numpy()]
+    preds   = (np.array(probs) >= 0.5).astype(int)
+    adjacency_results['auroc'].append(adj_metrics['auroc'])
+    adjacency_results['auprc'].append(adj_metrics['auprc'])
+    adjacency_results['f1'].append(float(f1_score(targets, preds, zero_division=0)))
 
     # ── fragment clustering ───────────────────────────────────────────────────
     similarity   = model.get_output(fragments)
@@ -73,9 +78,9 @@ for i in range(N_SAMPLES):
 # ── assemble and save results ─────────────────────────────────────────────────
 results = {
     'adjacency_prediction': {
-        'precision': round(float(np.mean(adjacency_results['precision'])), 4),
-        'recall':    round(float(np.mean(adjacency_results['recall'])),    4),
-        'f1':        round(float(np.mean(adjacency_results['f1'])),        4),
+        'auroc': round(float(np.mean(adjacency_results['auroc'])), 4),
+        'auprc': round(float(np.mean(adjacency_results['auprc'])), 4),
+        'f1':    round(float(np.mean(adjacency_results['f1'])),    4),
     },
     'fragment_clustering': {
         'ari_mean':    round(float(np.mean(clustering_results['ari'])),    4),

@@ -51,7 +51,10 @@ COND_LABELS_TEX <- c(
 all_run_names <- unlist(COND_RUNS)
 
 raw <- lapply(readLines(RESULTS_PATH), fromJSON)
-df_all <- bind_rows(lapply(raw, function(x) as.data.frame(x, stringsAsFactors = FALSE)))
+df_all <- bind_rows(lapply(raw, function(x) {
+  x[sapply(x, is.null)] <- NA
+  as.data.frame(x, stringsAsFactors = FALSE)
+}))
 
 # Keep only ANOVA runs; if a run appears multiple times take the last entry
 df <- df_all |>
@@ -253,14 +256,13 @@ p <- ggplot(plot_df, aes(x = condition, y = best_ari)) +
   geom_jitter(width = 0.08, size = 2.2, alpha = 0.55, colour = "#2C7BB6") +
   geom_errorbar(
     data    = means_df,
-    mapping = aes(y = m, ymin = m - s, ymax = m + s),
-    width   = 0.18, linewidth = 0.7, inherit.aes = FALSE,
-    aes(x = condition)
+    mapping = aes(x = condition, ymin = m - s, ymax = m + s),
+    width   = 0.18, linewidth = 0.7, inherit.aes = FALSE
   ) +
   geom_point(
     data    = means_df,
-    mapping = aes(y = m), size = 3.5, shape = 18, inherit.aes = FALSE,
-    aes(x = condition)
+    mapping = aes(x = condition, y = m),
+    size = 3.5, shape = 18, inherit.aes = FALSE
   ) +
   scale_x_discrete(labels = COND_LABELS_PLAIN) +
   labs(

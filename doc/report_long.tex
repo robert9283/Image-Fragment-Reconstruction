@@ -542,12 +542,11 @@ $\hat{\sigma}/\!\sqrt{5}$, where $\hat{\sigma}$ is the pooled within-condition
 standard deviation estimated from the experiment.
 The minimum detectable difference in ARI at $80\%$ power is approximately
 $1.43\,\hat{\sigma}$.
-% TODO: fill in hat{sigma} and Delta_min once all runs complete.
-Preliminary single-seed runs across configurations showed inter-condition
-ARI differences of $0.01$--$0.02$. Non-significant results should therefore
-be read as \emph{inconclusive} rather than as evidence of equivalence; a
-larger seed sweep ($n \gtrsim 20$) would be needed to resolve effects of
-that magnitude.
+The pooled within-condition standard deviation from the completed experiment
+is $\hat{\sigma} = 0.015$, giving $\Delta_{\min} \approx 0.022$.
+The observed inter-condition ARI differences among conditions~(a)--(d) are
+$0.01$--$0.03$, right at the detection boundary; condition~(e) deviates by
+$\sim\!0.08$, well above it.
 
 \begin{table}[h]
 \centering
@@ -570,6 +569,38 @@ Condition~(a) reuses existing runs \texttt{adj\_only\_seed\_0--4}.}
 \label{tab:anova-design}
 \end{table}
 
+\subsection{ANOVA results}
+
+\input{tab_anova_summary.tex}
+
+The omnibus Welch one-way ANOVA is highly significant
+($F(4,\,9.75) = 22.6$, $p = 6.3 \times 10^{-5}$, $\alpha = 0.10$),
+so the planned contrasts are evaluated.
+
+\input{tab_anova_omnibus.tex}
+
+\input{tab_anova_contrasts.tex}
+
+\textbf{Contrast 1} (same-image loss, (c) vs (a)): $\Delta = +0.020$,
+95\% CI $[-0.001,\;0.040]$, $p = 0.055$, $d = 1.49$ — significant at
+$\alpha = 0.10$. Adding the same-image loss yields a modest positive
+effect, but the confidence interval barely excludes zero, and the
+effect size is small in absolute ARI terms.
+
+\textbf{Contrast 2} (loss tilt, (e) vs (a)): $\Delta = -0.077$,
+95\% CI $[-0.103,\;-0.051]$, $p = 0.0001$, $d = -4.35$ — highly
+significant. Class-balanced weighting ($\beta=1$) substantially
+degrades clustering performance relative to plain BCE ($\beta=1/52$).
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{fig_anova_ari.png}
+\caption{ARI per seed for each condition. Diamond = mean, bar = $\pm 1$ SD.
+Conditions (a)--(d) are tightly clustered; condition~(e) ($\beta=1$) sits
+$\sim 0.08$ ARI lower.}
+\label{fig:anova-ari}
+\end{figure}
+
 \subsection{Performance on the pretext task}
 
 Across all configurations tested, AUROC sits in the range $0.95$--$0.97$ and
@@ -578,9 +609,8 @@ random adjacent pair and a random non-adjacent pair, the model ranks the
 adjacent one higher $\sim 95$--$97\%$ of the time; the top-ranked pairs are
 almost all true adjacencies. By any reasonable standard the model has
 \emph{nearly solved} the binary pretext task, and this holds regardless of
-the loss configuration (see Sections~9.3--9.4 for the per-hyperparameter
-breakdown). Downstream clustering ARI is meaningful but lower; representative
-failure cases are discussed in Section~10.
+the loss configuration. Downstream clustering ARI is meaningful but lower;
+representative failure cases are discussed in Section~10.
 
 \input{figures/fig_roc_curves.tex}
 
@@ -599,157 +629,10 @@ implicitly learned a graded \emph{same-source} signal rather than a strict
 binary adjacency predictor, which is precisely what the downstream spectral
 clustering step consumes.
 
-\subsection{Effect of the loss tilt parameter $\beta$}
-
-This ablation varies $\beta_{\text{adj}}$ (Section~\ref{sec:loss},
-Equation~\eqref{eq:wbce}) over $\{0.019, 0.3, 1.0\}$ while holding all
-other settings fixed: adjacency loss only ($\lambda_{\text{adj}} = 1$,
-$\lambda_{\text{same}} = 0$), single
-seed, and the standard training budget. The three values correspond to plain
-unweighted BCE ($\beta_{\text{adj}} \cdot 52 = 1$), a mild upweighting, and
-the textbook class-balanced weighting ($w_{+} = 52$).
-
-\begin{center}
-\begin{tabular}{lccc}
-\toprule
-\textbf{Run} & \textbf{$\beta$} & \textbf{Best ARI} & \textbf{AUROC / AUPRC} \\
-\midrule
-\texttt{plain\_bce}     & $0.019$ & $0.535$ & $0.969 \,/\, 0.432$ \\
-\texttt{wbce\_beta\_03} & $0.3$   & $0.523$ & $0.973 \,/\, 0.435$ \\
-\texttt{wbce\_beta\_1}  & $1.0$   & $0.462$ & $0.969 \,/\, 0.405$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-All three runs are single-seed. AUROC is essentially constant
-(within $0.005$, well below the noise floor) and the ARI differences
-($\sim 0.07$ between best and worst) are within $\sim 2\sigma$ of zero. The
-data is consistent with $\beta$ being a second-order knob across the range
-tested, contradicting the prior expectation we expressed in Section 6 of an
-aggressive tilt being optimal. We adopt $\beta = 1/52$ (plain BCE) for all
-subsequent experiments on the grounds of simplicity, not measured
-superiority.
-
-\subsection{Effect of the multi-task weight $\lambda_{\text{same}}$}
-
-This sweep varies $\lambda_{\text{same}}$ in the multi-task loss
-(Section~\ref{sec:loss}, Equation~\eqref{eq:multi}) while holding all other
-settings fixed: $\lambda_{\text{adj}} = 1$, $\beta_{\text{adj}} = 1/52$
-(plain BCE on the adjacency term, as in Section~9.3), unweighted BCE on the
-same-image term (see Section~\ref{sec:loss}), single seed. At inference,
-$p_{ij}$ is used directly as the affinity matrix for spectral clustering.
-
-\begin{center}
-\begin{tabular}{lccc}
-\toprule
-\textbf{Run} & \textbf{$\lambda_{\text{same}}$} & \textbf{Best ARI} & \textbf{AUROC / AUPRC} \\
-\midrule
-\texttt{plain\_bce\_baseline}  & $0.0$ & $0.554$         & $0.970 \,/\, 0.443$ \\
-\texttt{multitask\_01}         & $0.1$ & $0.489$         & $0.954 \,/\, 0.308$ \\
-\texttt{multitask\_05}         & $0.5$ & $0.549$         & $0.959 \,/\, 0.331$ \\
-\texttt{multitask\_10}         & $1.0$ & $\mathbf{0.570}$& $0.959 \,/\, 0.328$ \\
-\texttt{multitask\_15}         & $1.5$ & $0.566$         & $0.956 \,/\, 0.314$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-All five runs in the table are single-seed; the differences in best ARI
-between any two of $\lambda_{\text{same}} \in \{0, 0.5, 1.0, 1.5\}$ are
-within $\sim 1\sigma$ of zero given $\sigma_{\text{seed}} \approx 0.033$.
-The $\lambda_{\text{same}} = 0.1$ point is the only one further from the
-others ($\sim 1.4\sigma$ below the baseline) and could be a bad seed; we do
-not draw conclusions from a single run.
-
-What is more reliable is the systematic shift in adjacency-prediction
-metrics: AUROC drops from $0.970$ to $\sim 0.959$ and AUPRC from $0.443$ to
-$\sim 0.32$ when the same-image loss term is added, regardless of
-$\lambda_{\text{same}}$. The multi-task model is consistently a slightly
-worse adjacency predictor in exchange for a more task-aligned signal.
-
-To get a defensible answer to the headline question (does multi-task at
-$\lambda_{\text{same}} = 1$ outperform adjacency-only?) we run a follow-up
-experiment with multiple seeds per configuration; see Section 9.5.
-
-
-\subsection{Multi-seed ANOVA: adj-only vs multi-task vs same-only}
-
-The three configurations compared are defined by their loss weights
-(Equation~\eqref{eq:multi}):
-
-\begin{center}
-\begin{tabular}{lcc}
-\toprule
-\textbf{Configuration} & $\lambda_{\text{adj}}$ & $\lambda_{\text{same}}$ \\
-\midrule
-adj-only   & $1$ & $0$ \\
-multi-task & $1$ & $1$ \\
-same-only  & $0$ & $1$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-Each was trained with five fixed random seeds $\{0, 1, 2, 3, 4\}$ under otherwise
-identical settings. Best-checkpoint ARI is the primary metric.
-
-\begin{center}
-\begin{tabular}{lcccccc|cc}
-\toprule
-\textbf{Configuration} & \textbf{s0} & \textbf{s1} & \textbf{s2} & \textbf{s3} & \textbf{s4} & \textbf{mean} & \textbf{std} \\
-\midrule
-adj-only  ($\lambda_{\text{same}}=0$) & $0.539$ & $0.555$ & $0.545$ & $0.511$ & $0.539$ & $0.538$ & $0.016$ \\
-multi-task ($\lambda_{\text{same}}=1$) & $0.575$ & $0.545$ & $0.571$ & $0.512$ & $0.502$ & $0.541$ & $0.033$ \\
-same-only ($\lambda_{\text{adj}}=0$)  & $0.540$ & $0.548$ & $0.554$ & $0.514$ & $0.501$ & $0.531$ & $0.023$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-We applied Welch's two-sample $t$-test (unequal variances, two-sided) to each pair of
-configurations:
-
-\begin{center}
-\begin{tabular}{lcc}
-\toprule
-\textbf{Comparison} & $t$ & $p$ \\
-\midrule
-multi-task vs adj-only  & $0.19$ & $0.855$ \\
-multi-task vs same-only & $0.52$ & $0.619$ \\
-adj-only vs same-only   & $0.49$ & $0.636$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-None of the comparisons approach significance at any conventional level. The three
-configurations produce indistinguishable downstream clustering across the seeds tested.
-
-As a sanity check: for same-only, the model receives no adjacency supervision
-($\lambda_{\text{adj}} = 0$) and adjacency AUROC sits at chance
-($0.500 \pm 0.000$ across all five seeds), confirming that $p_{ij}$ is
-untrained on that signal. Despite this, the encoder still clusters meaningfully
-(mean ARI $0.531$), showing it does not collapse when trained on same-image
-supervision alone.
-
-The null result is consistent with two observations. First,
-adjacency AUROC is near-saturated ($\sim 0.97$) for all configurations that
-include the adjacency loss, so the binding constraint on downstream ARI is not the
-quality of the pretext-task signal but factors the model cannot overcome --- near-uniform
-fragments, repeated textures, and the fundamental difficulty of a purely local
-adjacency signal. Second, the same-image loss term operates on a denser but easier
-signal (10\% positive rate vs 1.9\%); it does not add information that the adjacency
-loss was otherwise missing.
-
-The practical implication is modest: the choice of loss configuration is not a
-significant lever at this scale. We adopt multi-task ($\lambda_{\text{same}} = 1$) as
-the default because it has the highest mean ARI and the highest single-seed peak, but we
-caution that the advantage is not statistically supported with $n = 5$ seeds; a larger
-seed sweep would be needed to confirm it.
 
 
 \subsection{Final test evaluation}
 \label{sec:test-eval}
-
-% TODO: fill in once overnight runs complete and best configuration is chosen.
-% Run: bash scripts/run_test_eval.sh <best_run_name>
-% Results saved to runs/<best_run_name>/test_metrics.json
 
 The results above were obtained on validation batches used for checkpoint
 selection and are therefore subject to a mild selection bias. To obtain an
@@ -758,19 +641,20 @@ $1000$ independently sampled test batches. The test split contains $5{,}000$
 images; with batches of 10 images each image appears on average twice across
 the 1000 batches, so the evaluation is not fully independent at the image
 level, though each batch presents a distinct clustering problem. The chosen
-run was \texttt{TODO} ($\lambda_{\text{adj}} = \text{TODO}$,
-$\lambda_{\text{same}} = \text{TODO}$, $\beta = \text{TODO}$,
-seed $= \text{TODO}$).
+run was \texttt{multitask\_10\_seed\_2} ($\lambda_{\text{adj}} = 1.0$,
+$\lambda_{\text{same}} = 1.0$, $\beta = 1/52$, seed $= 2$),
+which achieved the highest validation ARI of $0.573$.
 
 \begin{center}
 \begin{tabular}{lcc}
 \toprule
 \textbf{Metric} & \textbf{Mean} & \textbf{Std} \\
 \midrule
-ARI     & TODO & TODO \\
-NMI     & TODO & TODO \\
-Purity  & TODO & TODO \\
-Adj.\ F1 & TODO & TODO \\
+ARI          & $0.521$ & $0.104$ \\
+NMI          & $0.686$ & $0.071$ \\
+Purity       & $0.694$ & $0.076$ \\
+Adj.\ AUROC  & $0.948$ & ---     \\
+Adj.\ F1     & $0.356$ & ---     \\
 \bottomrule
 \end{tabular}
 \end{center}

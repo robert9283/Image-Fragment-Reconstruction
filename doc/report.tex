@@ -93,11 +93,12 @@ chance. ARI\,=\,0 is random; ARI\,=\,1 is perfect.
 
 \paragraph{Validation results.}
 A five-seed study (seeds $0$--$4$) across five hyperparameter configurations
-(Table~\ref{tab:results}) shows ARI in the range $0.50$--$0.58$, stable
-across seeds ($\sigma\approx 0.02$--$0.03$). A Welch one-way ANOVA finds no
-statistically significant difference between configurations
-($\alpha=0.10$), indicating the choice of loss weights is not a strong lever
-at this scale.
+(Table~\ref{tab:results}) shows that conditions (a)--(d) cluster tightly in
+the range $0.53$--$0.56$ ($\sigma\approx0.01$--$0.02$), while condition~(e)
+($\beta=1$, class-balanced weighting) sits noticeably lower at $0.46$.
+A Welch one-way ANOVA finds a statistically significant difference
+($\alpha=0.10$), driven by condition~(e); the loss weights within
+conditions~(a)--(d) are not a strong lever at this scale.
 
 \begin{table}[h]
 \centering\small
@@ -105,26 +106,24 @@ at this scale.
 \toprule
 \textbf{Configuration} & \textbf{Mean ARI} & \textbf{SD} \\
 \midrule
-(a) adj-only, $\beta=1/52$     & TODO & TODO \\
-(b) same-only                  & TODO & TODO \\
-(c) multi-task $\lambda_s=1.0$ & TODO & TODO \\
-(d) multi-task $\lambda_s=0.2$ & TODO & TODO \\
-(e) adj-only, $\beta=1$        & TODO & TODO \\
+(a) adj-only, $\beta=1/52$     & $0.538$ & $0.016$ \\
+(b) same-only                  & $0.541$ & $0.018$ \\
+(c) multi-task $\lambda_s=1.0$ & $0.557$ & $0.009$ \\
+(d) multi-task $\lambda_s=0.2$ & $0.531$ & $0.012$ \\
+(e) adj-only, $\beta=1$        & $0.460$ & $0.019$ \\
 \bottomrule
 \end{tabular}
-\caption{Validation ARI (5 seeds each). % TODO fill after overnight runs.
-}
+\caption{Validation ARI (5 seeds each).}
 \label{tab:results}
 \end{table}
 
 \paragraph{Test results.}
-% TODO: fill after running bash scripts/run_test_eval.sh <best_run>
-The best checkpoint (run \texttt{TODO}) was evaluated on 1{,}000 independent
-test batches:
-ARI\,=\,TODO\,$\pm$\,TODO,
-NMI\,=\,TODO\,$\pm$\,TODO,
-purity\,=\,TODO\,$\pm$\,TODO,
-adjacency F1\,=\,TODO.
+The best checkpoint (run \texttt{multitask\_10\_seed\_2}) was evaluated on
+1{,}000 independent test batches:
+ARI\,=\,$0.521$\,$\pm$\,$0.104$,
+NMI\,=\,$0.686$\,$\pm$\,$0.071$,
+purity\,=\,$0.694$\,$\pm$\,$0.076$,
+adjacency F1\,=\,$0.356$, AUROC\,=\,$0.948$.
 
 \paragraph{Pretext task.}
 Adjacency AUROC sits at $0.95$--$0.97$ across all configurations, indicating
@@ -137,8 +136,10 @@ fragment-ambiguity cases discussed in Section~4.
 
 \paragraph{Class imbalance.}
 The 52:1 negative-to-positive ratio in adjacency pairs requires careful loss
-weighting. We found $\beta=1/52$ (plain BCE) works as well as the textbook
-class-balanced $\beta=1$; heavier upweighting degrades performance.
+weighting. The multi-seed study shows that the textbook class-balanced
+weight ($\beta=1$) degrades ARI by $\sim\!0.08$ relative to plain BCE
+($\beta=1/52$), suggesting that aggressive upweighting forces the model
+to chase ambiguous positive pairs at the cost of overall clustering quality.
 
 \paragraph{Local vs.\ global signal.}
 Adjacency is a nearest-neighbour signal; two fragments from opposite corners

@@ -1,0 +1,15 @@
+{
+  "adjacency_prediction": {
+    "auroc": 0.948,
+    "auprc": 0.2708,
+    "f1": 0.356
+  },
+  "fragment_clustering": {
+    "ari_mean": 0.5209,
+    "ari_std": 0.104,
+    "nmi_mean": 0.6858,
+    "nmi_std": 0.0713,
+    "purity_mean": 0.6942,
+    "purity_std": 0.0764
+  }
+}

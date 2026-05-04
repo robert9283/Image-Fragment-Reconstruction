@@ -8,7 +8,12 @@
   `multitask_10`, `multitask_15`, `same_only`, `noise_seed_0..4`, `test_single_head`,
   `test_single_head_full` — check `scripts/runs_after_refactor.md` for full list
 
-## doc/approach.tex (detailed writeup)
+## Submission
+
+- Create a GitHub release on `main` with the best `model.pt` and its `config.yaml` attached
+  as release assets (`gh release create`). Pick the best run after overnight ANOVA finishes.
+
+## doc/report_long.tex (detailed writeup)
 
 - §9.2 Hyperparameter optimisation: fill in `\hat{\sigma}` and `\Delta_{\min}` from R script output
 - §9.2 Hyperparameter optimisation: fill in ANOVA table with actual results (from `doc/tab_anova_*.tex`)
@@ -29,6 +34,8 @@
 
 - `run.sh`: pipeline script (train → script1 → script2) — check comments are still accurate
   and that it works end-to-end with the updated scripts
+- refactoring: the folder to-share with its content can be moved to the src folder. Afterwards check that the code dependencies and that everything still runs
+- refactoring: the folder name debug is not so good. can you replace it by something more appropriate. Also afterwards check that this didnt imapct anything else. If necessary update the Readme.md
 
 ## Optional / lower priority
 
