@@ -3,8 +3,9 @@
 Self-supervised model that groups mixed image fragments back to their
 original source images.
 
-The full write-up of the approach, design decisions, and results is in
-[`doc/approach.pdf`](doc/approach.pdf).
+**Reports:**
+- [`doc/report.pdf`](doc/report.pdf) — 3-page submission report (architecture, results, challenges)
+- [`doc/report_long.pdf`](doc/report_long.pdf) — detailed write-up covering design decisions, experiments, and statistical analysis
 
 ## Setup
 
@@ -50,25 +51,31 @@ python src/script1_metrics.py    # per-sample metrics over 1000 samples
 python src/script2_visualise.py  # cluster visualisation on a single sample
 ```
 
-Edit the path at the top of each file if you want to evaluate a
-different checkpoint than `runs/latest/model.pt`.
+Both scripts default to `runs/latest/model` and read their config from
+the same directory. Override via environment variables:
+
+```bash
+CHECKPOINT_PATH=runs/my_run/model python src/script1_metrics.py
+```
 
 ## Reproducing the results in the report
 
 The `scripts/` folder contains the experiments referenced in
-`doc/approach.pdf`:
+`doc/report_long.pdf`:
 
 | Script | Purpose |
 |---|---|
-| `scripts/run_seed_sweep.sh` | Runs 5 seeded copies of a given configuration. |
-| `scripts/run_overnight.sh`  | Launches the multi-seed ANOVA experiment (~4h). |
-| `scripts/anova_analysis.py` | Computes mean ± SE per group and pairwise t-tests. |
+| `scripts/plan.py`           | Defines the 5-condition ANOVA run plan and launches missing runs. |
+| `scripts/run_overnight.sh`  | Launches the full multi-seed ANOVA experiment (~4 h). |
+| `scripts/run_test_eval.sh`  | Evaluates a named run on the test split; saves `test_metrics.json`. |
+| `scripts/anova_r.R`         | Welch one-way ANOVA + planned contrasts + Cohen's d; outputs LaTeX tables. |
 | `scripts/compare_runs.py`   | Markdown comparison table across all runs. |
 | `scripts/failure_modes.py`  | Generates the failure-modes figure for the report. |
 | `scripts/roc_curves.py`     | Generates the ROC / PR curves figure for the report. |
+| `scripts/weight_distribution.py` | Generates the confidence-score distribution figure. |
 
-`debug/generate_report.sh` runs the debug pipeline plus the two
-report-figure scripts, so the figures in `doc/approach.pdf` always
+`debug/generate_report.sh` runs the debug pipeline plus the three
+report-figure scripts, so the figures in `doc/report_long.pdf` always
 reflect the current best checkpoint in `results.jsonl`.
 
 ## Project structure
@@ -95,9 +102,11 @@ debug/
   generate_report.py     # bundles all debug plots into report.pdf
   generate_report.sh     # full debug pipeline + report-figure refresh
 doc/
-  approach.tex / .pdf    # the main write-up
-  fig_*.tex              # standalone TikZ figures, included via \input
+  report.tex / .pdf      # 3-page submission report
+  report_long.tex / .pdf # detailed write-up
+  figures/               # TikZ and PNG figures, included via \input / \includegraphics
   references.bib
+  build.sh               # compiles report_long.pdf (pdflatex + biber)
 runs/                    # per-run outputs (config + log + checkpoint),
                          # one subfolder per run, runs/latest -> newest
 to_share/
@@ -141,7 +150,7 @@ python main.py
 # 3. Refresh the report figures (uses runs/latest/ automatically).
 bash debug/generate_report.sh
 
-# 4. Compile the approach PDF.
+# 4. Compile the detailed write-up PDF.
 cd doc && bash build.sh
 
 # 5. (Optional) reproduce the multi-seed ANOVA experiment used in the
