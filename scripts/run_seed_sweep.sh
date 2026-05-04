@@ -65,7 +65,6 @@ cfg['patience']           = 10
 cfg['beta']               = float(beta)
 cfg['lambda_adj']         = float(l_adj)
 cfg['lambda_same']        = float(l_same)
-cfg['pos_weight_same']    = 1.0
 cfg['n_eval_batches']     = 20
 cfg['balanced_clustering']= True
 cfg['notes']              = notes

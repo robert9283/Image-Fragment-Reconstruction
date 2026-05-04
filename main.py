@@ -36,10 +36,9 @@ def load_model(name, cfg):
         beta = float(cfg.get('beta', 1.0))
         ratio = n_neg_over_n_pos(cfg['n_images'], GRID)
         return FragmentAdjacencyPredictor(
-            pos_weight_adj  = beta * ratio,
-            lambda_adj      = float(cfg.get('lambda_adj',  1.0)),
-            pos_weight_same = float(cfg.get('pos_weight_same', 1.0)),
-            lambda_same     = float(cfg.get('lambda_same', 0.0)),
+            pos_weight_adj = beta * ratio,
+            lambda_adj     = float(cfg.get('lambda_adj',  1.0)),
+            lambda_same    = float(cfg.get('lambda_same', 0.0)),
         )
     # TODO: add further models here
     else:

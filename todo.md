@@ -1,12 +1,32 @@
 # Open work items
 
-- ablate the comparison-head input. Three runs at otherwise-identical settings:
+- optional: ablate the comparison-head input. Three runs at otherwise-identical settings:
     - Run 1: current four-term combination `[a-b, a*b, a, b]` (1024-dim head)
     - Run 2: plain concatenation `[a, b]` only (512-dim head)
     - Run 3: difference + product `[a-b, a*b]` only (512-dim head)
   This will tell us whether the InferSent four-term construction actually helps
   on images or whether a simpler combination is just as good. ~75 min of
   training time total.
+
+- In section 9.2 "Performance on the pretext task" the following part sounds very unprofessional. Please shorten that. The intrinsic ambiguity part I dont understand just skip it bu you can forward o to the failure modes. "By contrast, the downstream clustering ARI is 0.554 on the same checkpoint and
+run — well above random (0.0) and meaningful, but far from perfect. The gap is real
+and instructive: adjacency-prediction quality sits within a few percentage points of its
+ceiling, while clustering quality is held back by something the pretext metric does not
+capture (intrinsic ambiguity in near-uniform fragments, repetitive textures, and so on;
+see Section 10 on failure modes)."
+
+- In section 9.2 "Performance on the pretext task" in the part "When we add the same-image head and increase λsame from 0 to 1, adjacency AUROC
+drops slightly (from 0.970 to 0.959) and AUPRC drops more (from 0.443 to 0.328). The
+model becomes a slightly worse adjacency predictor in exchange for a denser, more task-
+aligned signal, and trades a∼0.011 AUROC for a +0.016 ARI. The trade-off is consistent
+with the intuition that pretext-task quality is no longer the binding constraint at this
+point." please double check that this difference in performance was stat. significant. I am now confused where we did anova and where not.
+
+- in section "9.4 Effect of the multi-task weight" when you introduce y_ij^^same could you use in latex a case environment to have the notation a bit cleaner.
+
+- currently the result section refers to the results on the training dataset. This should be made clear. We also need to run the final model on the test dataset and write a subsection for that.
+- in section "5.4 Validation: multi-batch averaging" make a forward reference since we did not introduce the metrics for validation there yet.
+
 
 ## Done
 

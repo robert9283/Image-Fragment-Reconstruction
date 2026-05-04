@@ -54,49 +54,36 @@ class ComparisonHead(nn.Module):
 
 class FragmentAdjacencyPredictor(BaseModel):
     """
-    Siamese CNN with one or two prediction heads:
+    Siamese CNN with a single comparison head trained on a combined loss:
 
-    - The adjacency head predicts whether two fragments are spatially adjacent
-      in their source image. The labels come from the grid structure.
-    - The optional same-image head predicts whether two fragments come from
-      the same source image. The labels come from `labels` passed to
-      train_step. This head is only created when `lambda_same > 0`.
+        L = lambda_adj * WBCE(p_ij, y_adj)  +  lambda_same * BCE(p_ij, y_same)
 
-    The total loss is
+    Both loss terms act on the same per-pair score p_ij produced by the single
+    head. The adjacency term uses weighted BCE (pos_weight_adj = beta * ratio)
+    to handle the 52:1 class imbalance; the same-image term uses plain BCE
+    (mild 9.6:1 imbalance does not require reweighting).
 
-        L = lambda_adj * WBCE(adjacency)  +  lambda_same * WBCE(same_image),
+    Setting lambda_same = 0 recovers pure adjacency prediction.
+    Setting lambda_adj = 0 trains solely on same-image membership.
 
-    where each WBCE is weighted by its own pos_weight (default 1, i.e. plain
-    BCE; see results section of the doc for why this choice was made).
-
-    At inference, get_output returns the similarity matrix used by the
-    downstream clustering. When the same-image head is active, its
-    probabilities are returned, since they are more directly aligned with
-    the clustering objective. Otherwise the adjacency-head probabilities
-    are returned.
+    At inference, get_output returns the p_ij similarity matrix directly.
     """
 
     def __init__(self, embedding_dim=256, dropout=0.3, lr=1e-3, weight_decay=1e-4,
-                 pos_weight_adj=1.0, lambda_adj=1.0,
-                 pos_weight_same=1.0, lambda_same=0.0):
+                 pos_weight_adj=1.0, lambda_adj=1.0, lambda_same=0.0):
         self.device  = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.encoder = CNNEncoder(embedding_dim, dropout).to(self.device)
+        self.encoder  = CNNEncoder(embedding_dim, dropout).to(self.device)
         self.adj_head = ComparisonHead(embedding_dim).to(self.device)
 
-        self.lambda_adj  = float(lambda_adj)
-        self.lambda_same = float(lambda_same)
-        self.pos_weight_adj  = float(pos_weight_adj)
-        self.pos_weight_same = float(pos_weight_same)
+        self.lambda_adj     = float(lambda_adj)
+        self.lambda_same    = float(lambda_same)
+        self.pos_weight_adj = float(pos_weight_adj)
 
-        params = list(self.encoder.parameters()) + list(self.adj_head.parameters())
-        if self.lambda_same > 0:
-            self.same_head = ComparisonHead(embedding_dim).to(self.device)
-            params += list(self.same_head.parameters())
-        else:
-            self.same_head = None
-
-        self.optimizer = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
-        self.loss_fn   = nn.BCELoss(reduction='none')
+        self.optimizer = torch.optim.Adam(
+            list(self.encoder.parameters()) + list(self.adj_head.parameters()),
+            lr=lr, weight_decay=weight_decay,
+        )
+        self.loss_fn = nn.BCELoss(reduction='none')
 
     def _to_tensor(self, fragments):
         x = torch.tensor(fragments, dtype=torch.float32)
@@ -113,8 +100,6 @@ class FragmentAdjacencyPredictor(BaseModel):
     def train_step(self, fragments, labels, adjacency):
         self.encoder.train()
         self.adj_head.train()
-        if self.same_head is not None:
-            self.same_head.train()
 
         x = self._to_tensor(fragments)
         embeddings = self.encoder(x)                     # (N, D)
@@ -125,23 +110,21 @@ class FragmentAdjacencyPredictor(BaseModel):
         emb_i = embeddings[idx_i]
         emb_j = embeddings[idx_j]
 
-        # adjacency loss
+        preds = self.adj_head(emb_i, emb_j)
+
+        # adjacency loss (weighted BCE)
         adj_targets = torch.tensor(
             adjacency[idx_i.cpu(), idx_j.cpu()],
             dtype=torch.float32,
             device=self.device,
         )
-        adj_preds = self.adj_head(emb_i, emb_j)
-        loss = self.lambda_adj * self._wbce(adj_preds, adj_targets, self.pos_weight_adj)
+        loss = self.lambda_adj * self._wbce(preds, adj_targets, self.pos_weight_adj)
 
-        # same-image loss
-        if self.same_head is not None:
+        # same-image loss (plain BCE, same preds)
+        if self.lambda_same > 0:
             labels_t = torch.tensor(labels, dtype=torch.long, device=self.device)
             same_targets = (labels_t[idx_i] == labels_t[idx_j]).float()
-            same_preds   = self.same_head(emb_i, emb_j)
-            loss = loss + self.lambda_same * self._wbce(
-                same_preds, same_targets, self.pos_weight_same
-            )
+            loss = loss + self.lambda_same * self.loss_fn(preds, same_targets).mean()
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -150,53 +133,36 @@ class FragmentAdjacencyPredictor(BaseModel):
         return loss.item()
 
     def get_output(self, fragments):
-        """
-        Returns (N, N) similarity matrix for clustering. Uses the same-image
-        head's output when it exists, otherwise the adjacency head's output.
-        """
+        """Returns (N, N) similarity matrix p_ij for downstream clustering."""
         self.encoder.eval()
         self.adj_head.eval()
-        if self.same_head is not None:
-            self.same_head.eval()
-
         with torch.no_grad():
             x = self._to_tensor(fragments)
             embeddings = self.encoder(x)
-
             n = embeddings.shape[0]
             similarity = torch.zeros(n, n, device=self.device)
             idx_i, idx_j = torch.triu_indices(n, n, offset=1)
-            emb_i = embeddings[idx_i]
-            emb_j = embeddings[idx_j]
-
-            head = self.same_head if self.same_head is not None else self.adj_head
-            probs = head(emb_i, emb_j)
-
+            probs = self.adj_head(embeddings[idx_i], embeddings[idx_j])
             similarity[idx_i, idx_j] = probs
             similarity[idx_j, idx_i] = probs
-
         return similarity.cpu().numpy()
 
-    def _pair_scores(self, fragments, head):
-        """Return per-pair confidence scores from a given head, plus the upper-
-        triangular index pairs used. Eval mode, no grad."""
+    def _pair_scores(self, fragments):
+        """Per-pair scores p_ij from the head. Eval mode, no grad."""
         self.encoder.eval()
-        head.eval()
+        self.adj_head.eval()
         with torch.no_grad():
             x = self._to_tensor(fragments)
             embeddings = self.encoder(x)
             n = embeddings.shape[0]
             idx_i, idx_j = torch.triu_indices(n, n, offset=1)
-            probs = head(embeddings[idx_i], embeddings[idx_j]).cpu().numpy()
+            probs = self.adj_head(embeddings[idx_i], embeddings[idx_j]).cpu().numpy()
         return probs, idx_i, idx_j
 
     def evaluate_adjacency(self, fragments, adjacency):
-        """
-        Threshold-independent adjacency metrics: AUROC and AUPRC, computed on
-        the adjacency head's outputs.
-        """
+        """AUROC and AUPRC for adjacency prediction."""
         from sklearn.metrics import roc_auc_score, average_precision_score
-        probs, idx_i, idx_j = self._pair_scores(fragments, self.adj_head)
+        probs, idx_i, idx_j = self._pair_scores(fragments)
         targets = adjacency[idx_i.cpu(), idx_j.cpu()]
         return {
             'auroc': float(roc_auc_score(targets, probs)),
@@ -204,17 +170,11 @@ class FragmentAdjacencyPredictor(BaseModel):
         }
 
     def evaluate_same_image(self, fragments, labels):
-        """
-        Threshold-independent same-image metrics: AUROC and AUPRC, computed on
-        the same-image head's outputs. Only valid when the same-image head is
-        active (lambda_same > 0); returns None if the head was never created.
-
-        labels: (N,) array of source-image indices, one per fragment.
-        """
+        """AUROC and AUPRC for same-image prediction. Returns None if lambda_same == 0."""
         from sklearn.metrics import roc_auc_score, average_precision_score
-        if self.same_head is None:
+        if self.lambda_same == 0:
             return None
-        probs, idx_i, idx_j = self._pair_scores(fragments, self.same_head)
+        probs, idx_i, idx_j = self._pair_scores(fragments)
         labels = np.asarray(labels)
         targets = (labels[idx_i.cpu().numpy()] == labels[idx_j.cpu().numpy()]).astype(np.float32)
         return {
@@ -224,19 +184,13 @@ class FragmentAdjacencyPredictor(BaseModel):
 
     def save(self, path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        state = {
+        torch.save({
             'encoder':  self.encoder.state_dict(),
             'adj_head': self.adj_head.state_dict(),
-        }
-        if self.same_head is not None:
-            state['same_head'] = self.same_head.state_dict()
-        torch.save(state, path + '.pt')
+        }, path + '.pt')
 
     def load(self, path):
         checkpoint = torch.load(path + '.pt', map_location=self.device)
         self.encoder.load_state_dict(checkpoint['encoder'])
-        # backward compat: old checkpoints stored adjacency head under 'head'
         adj_state = checkpoint.get('adj_head', checkpoint.get('head'))
         self.adj_head.load_state_dict(adj_state)
-        if 'same_head' in checkpoint and self.same_head is not None:
-            self.same_head.load_state_dict(checkpoint['same_head'])
