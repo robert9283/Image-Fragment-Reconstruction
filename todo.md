@@ -25,6 +25,11 @@
 - §3 Test results: fill in ARI/NMI/purity/F1 from `runs/<best_run>/test_metrics.json`
 - Verify final PDF is ≤ 3 pages after filling in results
 
+## Housekeeping
+
+- `run.sh`: pipeline script (train → script1 → script2) — check comments are still accurate
+  and that it works end-to-end with the updated scripts
+
 ## Optional / lower priority
 
 - Ablate comparison-head input (3 runs, ~75 min): current 4-term `[a-b, a*b, a, b]`
