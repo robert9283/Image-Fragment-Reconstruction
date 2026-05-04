@@ -5,6 +5,7 @@ cd "$(dirname "$0")"
 
 pdflatex -interaction=nonstopmode report.tex
 pdflatex -interaction=nonstopmode report.tex
+pdflatex -interaction=nonstopmode report.tex
 rm -f report.aux report.log report.out report.toc
 echo "Done: report.pdf"
 
