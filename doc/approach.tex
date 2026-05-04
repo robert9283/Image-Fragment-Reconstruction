@@ -110,10 +110,10 @@ structure are ever used.
 % ─────────────────────────────────────────────
 
 The model is a Siamese network: a shared encoder is applied to each of two input
-fragments, and a comparison head maps the two embeddings to a confidence score
-$p_{ij} \in [0, 1]$ for the binary question of interest
-(Figure~\ref{fig:architecture}). When the multi-task loss is enabled, a second
-comparison head with the same structure is added for the same-image task.
+fragments, and a single comparison head maps the two embeddings to a confidence
+score $p_{ij} \in [0, 1]$ (Figure~\ref{fig:architecture}). The same score is
+used for both loss terms during training and as the clustering similarity at
+inference.
 
 \begin{figure}[h]
 \centering
@@ -121,9 +121,8 @@ comparison head with the same structure is added for the same-image task.
 \caption{Schematic of the model. The CNN encoder is applied with shared weights
 to each of two input fragments; its $256$-dimensional embeddings are combined into a
 single $1024$-dimensional vector via concatenation of difference, element-wise
-product, and the two embeddings themselves; this vector is fed to one or two
-comparison heads (adjacency, same-image) that produce a confidence score
-$p_{ij} \in [0, 1]$ for the corresponding binary question.}
+product, and the two embeddings themselves; this vector is fed to a single
+comparison head that produces one confidence score $p_{ij} \in [0, 1]$ per pair.}
 \label{fig:architecture}
 \end{figure}
 
@@ -237,28 +236,26 @@ of the same source image are penalised as a negative example by adjacency BCE,
 even though the clustering wants them in the same group. This mismatch limits
 how well any model trained purely on adjacency can do.
 
-The natural fix is a second prediction head trained on a denser, more
-task-aligned signal: same-image membership. The label
+The natural fix is to add a second loss term on a denser, more task-aligned
+signal: same-image membership. The label
 \[
 y^{\text{same}}_{ij} = \mathbb{1}\bigl[s(i) = s(j)\bigr]
 \]
 is also free, derivable from the labels passed to the data generator, and has
-a $\sim 10\%$ positive rate (versus $1.9\%$ for adjacency). We add a second
-comparison head identical in structure to the adjacency head and minimise the
-weighted sum
+a $\sim 10\%$ positive rate (versus $1.9\%$ for adjacency). Both terms act on
+the \emph{same} per-pair score $p_{ij}$ from the single comparison head:
 \begin{equation}
 \mathcal{L}_{\text{multi}} =
     \lambda_{\text{adj}}\,\mathcal{L}_{\text{WBCE}}^{\text{adj}}(\beta_{\text{adj}})
   + \lambda_{\text{same}}\,\mathcal{L}_{\text{BCE}}^{\text{same}}.
 \label{eq:multi}
 \end{equation}
-The adjacency head uses $\beta_{\text{adj}} = 1/52$ (plain BCE; the class
+The adjacency term uses $\beta_{\text{adj}} = 1/52$ (plain BCE; the class
 imbalance problem motivating $\beta$ is specific to adjacency with its
-$\sim$1.9\% positive rate). The same-image head uses unweighted BCE directly:
+$\sim$1.9\% positive rate). The same-image term uses unweighted BCE:
 at $\sim$10\% positives the imbalance is mild and no upweighting is needed.
-At inference the same-image head's confidence scores are used as the
-similarity matrix for spectral clustering. The choice of weights is ablated
-in Section~9.4.
+At inference, $p_{ij}$ is used directly as the similarity matrix for spectral
+clustering. The choice of weights is ablated in Section~9.4.
 
 The two signals are complementary in the sense documented by the
 same-image-only results in Section~9.5: adjacency provides a fine-grained
@@ -455,7 +452,7 @@ study is complete.
 \subsection{Headline number and run-to-run noise}
 
 The best configuration we found uses a multi-task loss with equal weights on the
-adjacency and same-image heads, plain BCE on both, balanced spectral clustering,
+adjacency and same-image terms, plain BCE on both, balanced spectral clustering,
 and validation ARI averaged over 20 fresh batches. We trained the same
 configuration five times with random seeds $\{0, 1, 2, 3, 4\}$ to estimate the
 run-to-run variance:
@@ -481,6 +478,84 @@ model's underlying ranking quality is robust to seed choice; what varies
 is how cleanly that ranking translates into a discrete partition --- the
 spectral clustering step is amplifying small representation differences
 into noticeable ARI differences.
+
+\subsection{Hyperparameter optimisation}
+\label{sec:hparam-design}
+
+Table~\ref{tab:anova-design} summarises the five conditions compared in the
+unified ANOVA. Each condition is run with five fixed random seeds.
+
+\paragraph{Model.}
+Let $y_{ij}$ denote the best-checkpoint ARI for condition
+$i \in \{a,b,c,d,e\}$ and seed $j \in \{0,\dots,4\}$. The one-way ANOVA
+model is
+\begin{equation}
+  y_{ij} = \mu + \tau_i + \varepsilon_{ij}, \qquad
+  \varepsilon_{ij} \sim \mathcal{N}(0,\,\sigma_i^2),
+  \label{eq:anova}
+\end{equation}
+where $\mu$ is the grand mean, $\tau_i$ is the effect of condition $i$
+(with $\sum_i \tau_i = 0$), and $\varepsilon_{ij}$ is the residual. The
+error variances $\sigma_i^2$ are allowed to differ across conditions
+(Welch one-way ANOVA\footnote{A two-way ANOVA on $(\lambda_{\text{same}},
+\beta)$ would be more informative but requires a full factorial design;
+due to compute limitations only an incomplete set of cells is available
+(Table~\ref{tab:anova-design}), so we collapse all conditions into a
+single factor.}). The omnibus null hypothesis
+$H_0\colon \tau_a = \tau_b = \tau_c = \tau_d = \tau_e = 0$ is tested at
+$\alpha = 0.10$. Because no condition plays the role of a natural baseline,
+the $p$-value from the omnibus test is of limited interpretive value
+regardless of outcome: a non-significant result directly suggests the
+hyperparameter choice is not a strong lever, while a significant result
+requires follow-up to identify which conditions differ. The primary
+scientific output is therefore the effect size and confidence interval on
+each planned contrast.
+
+\paragraph{Planned contrasts.}
+Two contrasts are specified a priori and tested if the omnibus test is
+significant:
+\begin{enumerate}
+  \item \textbf{Same-image loss:} $H_0\colon \tau_c = \tau_a$ — does adding
+        the same-image loss term at $\lambda_{\text{same}}=1$ improve
+        clustering over adj-only?
+  \item \textbf{Loss tilt:} $H_0\colon \tau_e = \tau_a$ — does the textbook
+        class-balanced weighting ($\beta=1$) change performance relative to
+        plain BCE ($\beta=1/52$)?
+\end{enumerate}
+
+\paragraph{Detectable effect sizes.}
+With $n = 5$ seeds per condition, the standard error of the mean is
+$\hat{\sigma}/\!\sqrt{5}$, where $\hat{\sigma}$ is the pooled within-condition
+standard deviation estimated from the experiment.
+The minimum detectable difference in ARI at $80\%$ power is approximately
+$1.43\,\hat{\sigma}$.
+% TODO: fill in hat{sigma} and Delta_min once all runs complete.
+Preliminary single-seed runs across configurations showed inter-condition
+ARI differences of $0.01$--$0.02$. Non-significant results should therefore
+be read as \emph{inconclusive} rather than as evidence of equivalence; a
+larger seed sweep ($n \gtrsim 20$) would be needed to resolve effects of
+that magnitude.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{clcccl}
+\toprule
+\textbf{Cond.} & \textbf{Description} & $\lambda_{\text{adj}}$ & $\lambda_{\text{same}}$ & $\beta$ & \textbf{Seeds} \\
+\midrule
+(a) & adj-only, plain BCE                      & $1.0$ & $0.0$ & $1/52$ & 0--4 \\
+(b) & same-only                                & $0.0$ & $1.0$ & $1/52$ & 0--4 \\
+(c) & multi-task, $\lambda_{\text{same}}=1.0$  & $1.0$ & $1.0$ & $1/52$ & 0--4 \\
+(d) & multi-task, $\lambda_{\text{same}}=0.2$  & $1.0$ & $0.2$ & $1/52$ & 0--4 \\
+(e) & adj-only, class-balanced BCE             & $1.0$ & $0.0$ & $1$    & 0--4 \\
+\bottomrule
+\end{tabular}
+\caption{Unified ANOVA design. Each condition uses five fixed random seeds $\{0,1,2,3,4\}$.
+$\beta$ controls the positive-class upweighting in the adjacency loss
+(Section~\ref{sec:loss}): $\beta = 1/52$ is plain (unweighted) BCE,
+$\beta = 1$ is the textbook class-balanced weight ($w_{+} = 52$).
+Condition~(a) reuses existing runs \texttt{adj\_only\_seed\_0--4}.}
+\label{tab:anova-design}
+\end{table}
 
 \subsection{Performance on the pretext task}
 
@@ -515,8 +590,8 @@ clustering step consumes.
 
 This ablation varies $\beta_{\text{adj}}$ (Section~\ref{sec:loss},
 Equation~\eqref{eq:wbce}) over $\{0.019, 0.3, 1.0\}$ while holding all
-other settings fixed: adjacency head only ($\lambda_{\text{adj}} = 1$,
-$\lambda_{\text{same}} = 0$, so $\beta_{\text{same}}$ is not used), single
+other settings fixed: adjacency loss only ($\lambda_{\text{adj}} = 1$,
+$\lambda_{\text{same}} = 0$), single
 seed, and the standard training budget. The three values correspond to plain
 unweighted BCE ($\beta_{\text{adj}} \cdot 52 = 1$), a mild upweighting, and
 the textbook class-balanced weighting ($w_{+} = 52$).
@@ -547,10 +622,9 @@ superiority.
 This sweep varies $\lambda_{\text{same}}$ in the multi-task loss
 (Section~\ref{sec:loss}, Equation~\eqref{eq:multi}) while holding all other
 settings fixed: $\lambda_{\text{adj}} = 1$, $\beta_{\text{adj}} = 1/52$
-(plain BCE on the adjacency head, as in Section~9.3), unweighted BCE on the
-same-image head (see Section~\ref{sec:loss}), single seed. At inference,
-when the same-image head is active its confidence scores are used as the
-affinity matrix for spectral clustering.
+(plain BCE on the adjacency term, as in Section~9.3), unweighted BCE on the
+same-image term (see Section~\ref{sec:loss}), single seed. At inference,
+$p_{ij}$ is used directly as the affinity matrix for spectral clustering.
 
 \begin{center}
 \begin{tabular}{lccc}
@@ -575,7 +649,7 @@ not draw conclusions from a single run.
 
 What is more reliable is the systematic shift in adjacency-prediction
 metrics: AUROC drops from $0.970$ to $\sim 0.959$ and AUPRC from $0.443$ to
-$\sim 0.32$ when the same-image head is added, regardless of
+$\sim 0.32$ when the same-image loss term is added, regardless of
 $\lambda_{\text{same}}$. The multi-task model is consistently a slightly
 worse adjacency predictor in exchange for a more task-aligned signal.
 
@@ -634,19 +708,21 @@ adj-only vs same-only   & $0.49$ & $0.636$ \\
 None of the comparisons approach significance at any conventional level. The three
 configurations produce indistinguishable downstream clustering across the seeds tested.
 
-As a sanity check: for same-only, the adjacency head receives no gradient and its AUROC
-sits at chance ($0.500 \pm 0.000$ across all five seeds), confirming the head is
-untrained. Despite this, the encoder still clusters meaningfully (mean ARI $0.531$),
-showing it does not collapse when trained on same-image supervision alone.
+As a sanity check: for same-only, the model receives no adjacency supervision
+($\lambda_{\text{adj}} = 0$) and adjacency AUROC sits at chance
+($0.500 \pm 0.000$ across all five seeds), confirming that $p_{ij}$ is
+untrained on that signal. Despite this, the encoder still clusters meaningfully
+(mean ARI $0.531$), showing it does not collapse when trained on same-image
+supervision alone.
 
 The null result is consistent with two observations. First,
 adjacency AUROC is near-saturated ($\sim 0.97$) for all configurations that
-include the adjacency head, so the binding constraint on downstream ARI is not the
+include the adjacency loss, so the binding constraint on downstream ARI is not the
 quality of the pretext-task signal but factors the model cannot overcome --- near-uniform
 fragments, repeated textures, and the fundamental difficulty of a purely local
-adjacency signal. Second, the same-image head operates on a denser but easier signal
-(10\% positive rate vs 1.9\%); it does not add information that the adjacency head was
-otherwise missing.
+adjacency signal. Second, the same-image loss term operates on a denser but easier
+signal (10\% positive rate vs 1.9\%); it does not add information that the adjacency
+loss was otherwise missing.
 
 The practical implication is modest: the choice of loss configuration is not a
 significant lever at this scale. We adopt multi-task ($\lambda_{\text{same}} = 1$) as
@@ -688,7 +764,7 @@ fragments across many batches, which we leave as follow-up work.
           quadratically and may become a bottleneck.
     \item The pretext metric and the task metric are misaligned. We train binary
           adjacency (only $\sim$1.9\% positives) but evaluate clustering. The
-          multi-task same-image head partially closes this gap, but at the cost
+          same-image loss term partially closes this gap, but at the cost
           of about $0.01$ AUROC and $0.10$ AUPRC on the adjacency task itself.
           The model trades per-edge precision for a denser task-aligned signal.
 \end{itemize}

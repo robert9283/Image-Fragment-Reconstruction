@@ -27,6 +27,8 @@ point." please double check that this difference in performance was stat. signif
 - currently the result section refers to the results on the training dataset. This should be made clear. We also need to run the final model on the test dataset and write a subsection for that.
 - in section "5.4 Validation: multi-batch averaging" make a forward reference since we did not introduce the metrics for validation there yet.
 
+- fig Figure 5: "Distribution of the model’s per-pair confidence scores" needs to be omitted or changed since we changed to one-head code
+
 
 ## Done
 

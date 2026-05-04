@@ -35,20 +35,18 @@
 \node[emb, right=of enc, yshift=8mm]  (e1) {$\mathbf{a} \in \mathbb{R}^{256}$};
 \node[emb, right=of enc, yshift=-8mm] (e2) {$\mathbf{b} \in \mathbb{R}^{256}$};
 
-% --- combination block (just a labelled box, no need for separate node here) ---
+% --- combination block ---
 \node[head, right=12mm of e1, yshift=-8mm,
       align=center] (combine)
       {combine:\\[1pt] $[\mathbf{a}-\mathbf{b}\,\|\,\mathbf{a}\odot\mathbf{b}\,\|\,\mathbf{a}\,\|\,\mathbf{b}]$\\[1pt]
        $\in \mathbb{R}^{1024}$};
 
-% --- two parallel heads ---
-\node[head, right=of combine, yshift=10mm, fill=orange!15] (adj_head)
-    {adjacency MLP};
-\node[head, right=of combine, yshift=-10mm, fill=orange!8] (same_head)
-    {same-image MLP};
+% --- single comparison head ---
+\node[head, right=of combine, align=center] (head)
+    {comparison\\MLP};
 
-\node[output, right=of adj_head]  (p_adj)  {$p^{\text{adj}}_{ij}$};
-\node[output, right=of same_head] (p_same) {$p^{\text{same}}_{ij}$};
+% --- output ---
+\node[output, right=of head] (p) {$p_{ij}$};
 
 % --- arrows ---
 \draw[arr] (f1) -- (enc);
@@ -57,15 +55,11 @@
 \draw[arr] (enc) -- (e2);
 \draw[arr] (e1) -- (combine);
 \draw[arr] (e2) -- (combine);
-\draw[arr] (combine) -- (adj_head);
-\draw[arr] (combine) -- (same_head);
-\draw[arr] (adj_head) -- (p_adj);
-\draw[arr] (same_head) -- (p_same);
+\draw[arr] (combine) -- (head);
+\draw[arr] (head) -- (p);
 
-% --- caption-like annotations under each output ---
-\node[note, below=1mm of p_adj,  align=center]
-    {adjacency\\confidence};
-\node[note, below=1mm of p_same, align=center]
-    {same-image\\confidence};
+% --- annotation under output ---
+\node[note, below=1mm of p, align=center]
+    {pair\\confidence};
 
 \end{tikzpicture}
