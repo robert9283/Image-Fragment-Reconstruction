@@ -680,16 +680,6 @@ fragments across many batches, which we leave as follow-up work.
 \section{Further Suggestions}
 % ─────────────────────────────────────────────
 
-\paragraph{Differentiable surrogate for ARI.}
-The training loss is on adjacency (or same-image), not on the downstream clustering
-objective. A more direct alternative is to optimise a differentiable approximation of
-ARI: the eigendecomposition and cluster-assignment steps of spectral clustering can be
-relaxed via Sinkhorn iterations (as in SwAV) or via a MinCut-style differentiable graph
-pooling. This would couple the representation learning to the clustering objective
-explicitly. We did not pursue it because the multi-task same-image head already captures
-most of the pairwise structure that ARI ultimately depends on, at a fraction of the
-implementation cost.
-
 \paragraph{Self-supervised pretrained encoder.}
 DINOv2 \parencite{moco2020} or another self-supervised image encoder could replace our
 trained-from-scratch CNN. Since these encoders use no labels, this stays within the

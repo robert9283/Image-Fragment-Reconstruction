@@ -87,6 +87,7 @@ def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, lo
         'final_same_auprc':  last.get('same_auprc'),
         'final_ari':     last.get('ari'),
         'final_nmi':     last.get('nmi'),
+        'final_purity':  last.get('purity'),
         'duration_min':  round(total_minutes, 1),
         'n_eval_batches':    cfg.get('n_eval_batches', 1),
         'balanced_clustering': cfg.get('balanced_clustering', False),

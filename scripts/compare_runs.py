@@ -36,6 +36,7 @@ def print_table(results):
         ('final_same_auroc',    'same AUROC'),
         ('final_same_auprc',    'same AUPRC'),
         ('final_ari',           'Final ARI'),
+        ('final_purity',        'Purity'),
         ('duration_min',        'Min'),
         ('notes',               'Notes'),
     ]
