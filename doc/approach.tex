@@ -197,6 +197,7 @@ within the image (96 of them) and across images are negative ($y_{ij} = 0$).}
 \end{figure}
 
 \subsection{Loss Function}
+\label{sec:loss}
 
 Binary cross-entropy is the natural loss for a binary prediction task:
 
@@ -215,11 +216,12 @@ pairs, and the model has little incentive to identify the few adjacent ones. The
 standard remedy is to upweight the rare class. Since only the ratio of the two
 class weights matters, we parameterise the loss with a single \emph{tilt}
 parameter $\beta \geq 1$:
-\[
+\begin{equation}
 \mathcal{L}_{\text{WBCE}}(\beta) = -\frac{1}{N}\sum_{(i,j)}
     \Bigl[\, \beta \cdot \tfrac{n_{-}}{n_{+}}\, y_{ij} \log p_{ij}
        + (1 - y_{ij}) \log(1 - p_{ij}) \,\Bigr].
-\]
+\label{eq:wbce}
+\end{equation}
 
 The textbook value is $\beta = 1$, the class-balanced loss: it equalises the
 total gradient contribution of the two classes, treating a single positive as
@@ -244,11 +246,12 @@ is also free, derivable from the labels passed to the data generator, and has
 a $\sim 10\%$ positive rate (versus $1.9\%$ for adjacency). We add a second
 comparison head identical in structure to the adjacency head and minimise the
 weighted sum
-\[
+\begin{equation}
 \mathcal{L}_{\text{multi}} =
     \lambda_{\text{adj}}\,\mathcal{L}_{\text{WBCE}}^{\text{adj}}(\beta_{\text{adj}})
   + \lambda_{\text{same}}\,\mathcal{L}_{\text{WBCE}}^{\text{same}}(\beta_{\text{same}}).
-\]
+\label{eq:multi}
+\end{equation}
 We use plain BCE on both heads ($\beta = 1/52$ for adjacency, $\beta = 1/9.6$
 for same-image, the analogous plain-BCE value given the same-image positive
 rate) and equal weights $\lambda_{\text{adj}} = \lambda_{\text{same}} = 1$.
@@ -509,7 +512,8 @@ clustering step consumes.
 
 \subsection{Effect of the loss tilt parameter $\beta$}
 
-The first ablation sweeps the WBCE tilt over $\beta \in \{0.019, 0.3, 1.0\}$:
+The first ablation sweeps the WBCE tilt $\beta$ (Section~\ref{sec:loss},
+Equation~\eqref{eq:wbce}) over $\beta \in \{0.019, 0.3, 1.0\}$:
 plain unweighted BCE ($\beta \cdot 52 = 1$), a mild upweighting, and the
 textbook class-balanced weighting ($w_{+} = 52$).
 
@@ -536,9 +540,9 @@ superiority.
 
 \subsection{Effect of the multi-task weight $\lambda_{\text{same}}$}
 
-The second sweep adds a same-image prediction head to the model, weighted by
-$\lambda_{\text{same}}$ relative to the adjacency loss ($\lambda_{\text{adj}} =
-1$ throughout). The same-image label $y^{\text{same}}_{ij} = \mathbb{1}[s(i) =
+The second sweep varies $\lambda_{\text{same}}$ in the multi-task loss
+(Section~\ref{sec:loss}, Equation~\eqref{eq:multi}), keeping
+$\lambda_{\text{adj}} = 1$ throughout. The same-image label $y^{\text{same}}_{ij} = \mathbb{1}[s(i) =
 s(j)]$ is also free, derivable from the labels passed to the data generator,
 and denser ($\sim$10\%\,positives instead of 1.9\%). At inference, when the
 same-image head is active we use \emph{its} confidence scores as the affinity
@@ -605,11 +609,23 @@ in Section 9.6.
 
 \subsection{Multi-seed ANOVA: adj-only vs multi-task vs same-only}
 
-To determine whether the apparent multi-task advantage holds up across random seeds, we
-trained each of the three configurations --- adjacency-only ($\lambda_{\text{same}} = 0$),
-multi-task ($\lambda_{\text{adj}} = \lambda_{\text{same}} = 1$), and same-image-only
-($\lambda_{\text{adj}} = 0$) --- with five fixed random seeds $\{0, 1, 2, 3, 4\}$ under
-otherwise identical settings. Best-checkpoint ARI is the primary metric.
+The three configurations compared are defined by their loss weights
+(Equation~\eqref{eq:multi}):
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & $\lambda_{\text{adj}}$ & $\lambda_{\text{same}}$ \\
+\midrule
+adj-only   & $1$ & $0$ \\
+multi-task & $1$ & $1$ \\
+same-only  & $0$ & $1$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each was trained with five fixed random seeds $\{0, 1, 2, 3, 4\}$ under otherwise
+identical settings. Best-checkpoint ARI is the primary metric.
 
 \begin{center}
 \begin{tabular}{lcccccc|cc}
