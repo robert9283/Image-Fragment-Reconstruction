@@ -256,7 +256,6 @@ The adjacency head uses $\beta_{\text{adj}} = 1/52$ (plain BCE; the class
 imbalance problem motivating $\beta$ is specific to adjacency with its
 $\sim$1.9\% positive rate). The same-image head uses unweighted BCE directly:
 at $\sim$10\% positives the imbalance is mild and no upweighting is needed.
-Equal loss weights $\lambda_{\text{adj}} = \lambda_{\text{same}} = 1$ are used.
 At inference the same-image head's confidence scores are used as the
 similarity matrix for spectral clustering. The choice of weights is ablated
 in Section~9.4.
