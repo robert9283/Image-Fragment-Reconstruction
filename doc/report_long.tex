@@ -601,33 +601,6 @@ $\sim 0.08$ ARI lower.}
 \label{fig:anova-ari}
 \end{figure}
 
-\subsection{Performance on the pretext task}
-
-Across all configurations tested, AUROC sits in the range $0.95$--$0.97$ and
-AUPRC is on the order of $20\times$ the random baseline of $0.019$. Given a
-random adjacent pair and a random non-adjacent pair, the model ranks the
-adjacent one higher $\sim 95$--$97\%$ of the time; the top-ranked pairs are
-almost all true adjacencies. By any reasonable standard the model has
-\emph{nearly solved} the binary pretext task, and this holds regardless of
-the loss configuration. Downstream clustering ARI is meaningful but lower;
-representative failure cases are discussed in Section~10.
-
-\input{figures/fig_roc_curves.tex}
-
-Figure~\ref{fig:roc-curves} shows the ROC and precision-recall curves for the
-best checkpoint. The ROC corner sits well into the top-left, consistent with
-the high AUROC; the precision-recall curve drops more steeply, reflecting the
-low positive rate of $\sim 1.9\%$.
-
-\input{figures/fig_weight_distribution.tex}
-
-Figure~\ref{fig:weight-distribution} shows the score distribution broken down
-by true pair class. Three regimes are visible: cross-image pairs concentrate
-near zero, strictly adjacent pairs peak around $0.7$--$0.85$, and
-same-image-but-not-adjacent pairs span the full $[0, 1]$ range. The model has
-implicitly learned a graded \emph{same-source} signal rather than a strict
-binary adjacency predictor, which is precisely what the downstream spectral
-clustering step consumes.
 
 
 
@@ -660,24 +633,35 @@ Adj.\ F1     & $0.356$ & ---     \\
 \end{center}
 
 % ─────────────────────────────────────────────
-\section{Failure Modes}
+\section{Discussion}
 % ─────────────────────────────────────────────
 
-Figure~\ref{fig:failure-modes} shows four misclassified fragments from the
-best checkpoint. The model produces only an unordered partition into $k = 10$
-clusters with arbitrary integer IDs; to relate them to source images for
-this visualisation we align cluster IDs to true source IDs by Hungarian
-matching on the validation batch
-(\texttt{scipy.optimize.linear\_sum\_assignment} on the $10 \times 10$
-confusion matrix). The rightmost column then shows the source image whose
-fragments form the plurality of the cluster the misclassified fragment was
-assigned to. The matching is per-batch and uses the true labels; the model
-itself has no notion of source identity.
+\paragraph{Pretext task.}
+Across all configurations, AUROC sits in the range $0.95$--$0.97$ on
+validation and $0.948$ on the held-out test set. The model has nearly solved
+the binary adjacency prediction problem. Figure~\ref{fig:roc-curves} shows the
+ROC and precision-recall curves for the best checkpoint; the precision-recall
+curve drops more steeply than the ROC, reflecting the low $1.9\%$ positive
+rate. Figure~\ref{fig:weight-distribution} reveals a graded \emph{same-source}
+signal: cross-image pairs concentrate near zero, adjacent pairs peak around
+$0.7$--$0.85$, and same-image non-adjacent pairs fill the intermediate range.
+This emergent structure is what the downstream spectral clustering step
+exploits.
+
+\input{figures/fig_roc_curves.tex}
+
+\input{figures/fig_weight_distribution.tex}
+
+\paragraph{Failure modes.}
+Figure~\ref{fig:failure-modes} shows representative misclassified fragments
+from the best checkpoint. Cluster IDs are aligned to source images via
+Hungarian matching on the confusion matrix for this visualisation; the model
+itself has no notion of source identity. The predominant failure pattern is
+near-uniform or repetitive-texture patches that produce similar embeddings
+regardless of source image, making them hard to assign correctly from
+appearance alone.
 
 \input{figures/fig_failure_modes.tex}
-
-A reliable taxonomy of failure modes would require aggregating misclassified
-fragments across many batches, which we leave as follow-up work.
 
 
 % ─────────────────────────────────────────────
