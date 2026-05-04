@@ -249,12 +249,14 @@ weighted sum
 \begin{equation}
 \mathcal{L}_{\text{multi}} =
     \lambda_{\text{adj}}\,\mathcal{L}_{\text{WBCE}}^{\text{adj}}(\beta_{\text{adj}})
-  + \lambda_{\text{same}}\,\mathcal{L}_{\text{WBCE}}^{\text{same}}(\beta_{\text{same}}).
+  + \lambda_{\text{same}}\,\mathcal{L}_{\text{BCE}}^{\text{same}}.
 \label{eq:multi}
 \end{equation}
-We use plain BCE on both heads ($\beta = 1/52$ for adjacency, $\beta = 1/9.6$
-for same-image, the analogous plain-BCE value given the same-image positive
-rate) and equal weights $\lambda_{\text{adj}} = \lambda_{\text{same}} = 1$.
+The adjacency head uses $\beta_{\text{adj}} = 1/52$ (plain BCE; the class
+imbalance problem motivating $\beta$ is specific to adjacency with its
+$\sim$1.9\% positive rate). The same-image head uses unweighted BCE directly:
+at $\sim$10\% positives the imbalance is mild and no upweighting is needed.
+Equal loss weights $\lambda_{\text{adj}} = \lambda_{\text{same}} = 1$ are used.
 At inference the same-image head's confidence scores are used as the
 similarity matrix for spectral clustering. The choice of weights is ablated
 in Section~9.4.
@@ -546,10 +548,8 @@ superiority.
 This sweep varies $\lambda_{\text{same}}$ in the multi-task loss
 (Section~\ref{sec:loss}, Equation~\eqref{eq:multi}) while holding all other
 settings fixed: $\lambda_{\text{adj}} = 1$, $\beta_{\text{adj}} = 1/52$
-(plain BCE on the adjacency head, as in Section~9.3), and
-$\beta_{\text{same}} = 1/9.6$ (plain BCE on the same-image head --- the
-analogous value for its $\sim$10\% positive rate, corresponding to
-\texttt{pos\_weight\_same} $= 1.0$). Single seed throughout. At inference,
+(plain BCE on the adjacency head, as in Section~9.3), unweighted BCE on the
+same-image head (see Section~\ref{sec:loss}), single seed. At inference,
 when the same-image head is active its confidence scores are used as the
 affinity matrix for spectral clustering.
 
