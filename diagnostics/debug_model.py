@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from debug.utils import load_batch, plot_matrix, GRID, N_IMAGES
+from diagnostics.utils import load_batch, plot_matrix, GRID, N_IMAGES
 from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
 
 CHECKPOINT = os.path.join(os.path.dirname(__file__), '..', 'runs', 'latest', 'model')

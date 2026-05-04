@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from debug.utils import load_batch, plot_matrix, GRID, FRAGMENT_SIZE, N_IMAGES
+from diagnostics.utils import load_batch, plot_matrix, GRID, FRAGMENT_SIZE, N_IMAGES
 
 images, fragments, labels, adjacency = load_batch(augmentation=True)
 

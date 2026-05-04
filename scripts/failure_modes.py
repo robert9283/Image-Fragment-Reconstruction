@@ -31,8 +31,9 @@ from src.clustering import cluster
 from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
 
 DOC_DIR    = os.path.join(PROJECT_ROOT, 'doc')
-PNG_PATH   = os.path.join(DOC_DIR, 'failure_modes.png')
-TEX_PATH   = os.path.join(DOC_DIR, 'fig_failure_modes.tex')
+FIG_DIR    = os.path.join(DOC_DIR, 'figures')
+PNG_PATH   = os.path.join(FIG_DIR, 'failure_modes.png')
+TEX_PATH   = os.path.join(FIG_DIR, 'fig_failure_modes.tex')
 RESULTS    = os.path.join(PROJECT_ROOT, 'results.jsonl')
 
 
@@ -65,10 +66,9 @@ def load_model(run_summary):
     beta = float(cfg.get('beta', 0.01923))
     ratio = n_neg_over_n_pos(cfg['n_images'], GRID)
     model = FragmentAdjacencyPredictor(
-        pos_weight_adj  = beta * ratio,
-        lambda_adj      = float(cfg.get('lambda_adj',  1.0)),
-        pos_weight_same = float(cfg.get('pos_weight_same', 1.0)),
-        lambda_same     = float(cfg.get('lambda_same', 0.0)),
+        pos_weight_adj = beta * ratio,
+        lambda_adj     = float(cfg.get('lambda_adj',  1.0)),
+        lambda_same    = float(cfg.get('lambda_same', 0.0)),
     )
     model.load(os.path.join(run_dir, 'model'))
     return model, cfg
