@@ -651,15 +651,6 @@ the default because it has the highest mean ARI and the highest single-seed peak
 caution that the advantage is not statistically supported with $n = 5$ seeds; a larger
 seed sweep would be needed to confirm it.
 
-\subsection{Apparent regression from earlier numbers}
-
-An earlier full training run (before multi-batch eval and balanced clustering
-were introduced) reported a best ARI of $0.787$. The current best of $0.570$
-is lower not because the model regressed, but because the earlier evaluation
-used a single validation batch per step. Within-batch variance was large
-($\sim \pm 0.1$), and the $0.787$ value was a single lucky draw. With averaging
-over twenty fresh batches per evaluation, the headline number reflects the
-model's actual generalisation behaviour rather than a favourable sample.
 
 % ─────────────────────────────────────────────
 \section{Failure Modes}
