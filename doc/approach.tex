@@ -543,14 +543,15 @@ superiority.
 
 \subsection{Effect of the multi-task weight $\lambda_{\text{same}}$}
 
-The second sweep varies $\lambda_{\text{same}}$ in the multi-task loss
-(Section~\ref{sec:loss}, Equation~\eqref{eq:multi}), keeping
-$\lambda_{\text{adj}} = 1$ throughout. The same-image label $y^{\text{same}}_{ij} = \mathbb{1}[s(i) =
-s(j)]$ is also free, derivable from the labels passed to the data generator,
-and denser ($\sim$10\%\,positives instead of 1.9\%). At inference, when the
-same-image head is active we use \emph{its} confidence scores as the affinity
-matrix for spectral clustering, since they are more directly aligned with the
-downstream objective.
+This sweep varies $\lambda_{\text{same}}$ in the multi-task loss
+(Section~\ref{sec:loss}, Equation~\eqref{eq:multi}) while holding all other
+settings fixed: $\lambda_{\text{adj}} = 1$, $\beta_{\text{adj}} = 1/52$
+(plain BCE on the adjacency head, as in Section~9.3), and
+$\beta_{\text{same}} = 1/9.6$ (plain BCE on the same-image head --- the
+analogous value for its $\sim$10\% positive rate, corresponding to
+\texttt{pos\_weight\_same} $= 1.0$). Single seed throughout. At inference,
+when the same-image head is active its confidence scores are used as the
+affinity matrix for spectral clustering.
 
 \begin{center}
 \begin{tabular}{lccc}
