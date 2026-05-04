@@ -19,8 +19,8 @@
   `test_single_head_full`, `balanced_multibatch`, `plain_bce`, `plain_bce_baseline`,
   `wbce_beta_03`, `wbce_beta_1`
 - `run.sh`: check comments are still accurate end-to-end
-- Refactoring: rename `debug/` folder to something more appropriate; update README
-- Refactoring: move `to_share/` into `src/`; check all imports still work
+- Refactoring: move `to_share/` into `src/` — skipped; touches 25+ config files and
+  8 scripts for minimal gain; `to_share/` matches the assignment's folder name
 
 ## Optional / lower priority
 

@@ -1,7 +1,7 @@
 """
 Plot training curves from training_log.jsonl.
 Run from the project root:
-    python debug/plot_training.py
+    python diagnostics/plot_training.py
 """
 import os
 import sys

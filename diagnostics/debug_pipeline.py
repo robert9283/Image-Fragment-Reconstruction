@@ -1,7 +1,7 @@
 """
 Debug script: visualise one training round — original images, their fragments,
 and the ground truth adjacency matrix. Run from the project root:
-    python debug/debug_pipeline.py
+    python diagnostics/debug_pipeline.py
 """
 import os
 import sys

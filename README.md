@@ -33,7 +33,7 @@ python main.py
 
 # 2. Generate the per-run debug report and refresh the figures used
 #    in the approach document. Reads from runs/latest/ automatically.
-bash debug/generate_report.sh
+bash diagnostics/generate_report.sh
 ```
 
 After training, the per-run outputs (config snapshot, training log,
@@ -74,7 +74,7 @@ The `scripts/` folder contains the experiments referenced in
 | `scripts/roc_curves.py`     | Generates the ROC / PR curves figure for the report. |
 | `scripts/weight_distribution.py` | Generates the confidence-score distribution figure. |
 
-`debug/generate_report.sh` runs the debug pipeline plus the three
+`diagnostics/generate_report.sh` runs the debug pipeline plus the three
 report-figure scripts, so the figures in `doc/report_long.pdf` always
 reflect the current best checkpoint in `results.jsonl`.
 
@@ -95,12 +95,12 @@ src/
   script2_visualise.py   # submission script 2
 scripts/
   *                      # experiment runners and analysis utilities
-debug/
+diagnostics/
   debug_pipeline.py      # sanity check on the data pipeline
   debug_model.py         # adjacency-prediction inspection on best checkpoint
   plot_training.py       # training curves from runs/latest/training_log.jsonl
-  generate_report.py     # bundles all debug plots into report.pdf
-  generate_report.sh     # full debug pipeline + report-figure refresh
+  generate_report.py     # bundles all diagnostic plots into report.pdf
+  generate_report.sh     # full diagnostic pipeline + report-figure refresh
 doc/
   report.tex / .pdf      # 3-page submission report
   report_long.tex / .pdf # detailed write-up
@@ -148,7 +148,7 @@ pip install -r requirements.txt
 python main.py
 
 # 3. Refresh the report figures (uses runs/latest/ automatically).
-bash debug/generate_report.sh
+bash diagnostics/generate_report.sh
 
 # 4. Compile the detailed write-up PDF.
 cd doc && bash build.sh

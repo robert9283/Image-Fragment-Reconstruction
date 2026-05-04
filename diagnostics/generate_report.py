@@ -1,7 +1,7 @@
 """
 Generate a PDF report bundling all debug plots.
 Run from the project root:
-    python debug/generate_report.py
+    python diagnostics/generate_report.py
 """
 import os
 import sys

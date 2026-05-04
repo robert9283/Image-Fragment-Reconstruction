@@ -3,7 +3,7 @@ Debug script: show predictions of an untrained model on one batch.
 Visualises the predicted similarity matrix vs ground truth adjacency,
 and highlights the top predicted pairs vs true adjacent pairs.
 Run from the project root:
-    python debug/debug_model.py
+    python diagnostics/debug_model.py
 """
 import os
 import sys
