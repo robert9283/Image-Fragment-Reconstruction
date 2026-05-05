@@ -46,6 +46,8 @@ Weight sharing ensures the comparison is symmetric and forces the encoder to
 learn a universal fragment representation rather than one tied to a specific
 input slot. No image-level labels are needed: the only supervision is whether two
 fragments are adjacent, which follows directly from their grid positions.
+
+\paragraph{Why adjacency prediction?}
 We preferred this over contrastive approaches because the adjacency signal is
 local and geometrically interpretable --- each label has a direct spatial
 meaning --- which makes failure modes transparent and mirrors the edge-continuity
