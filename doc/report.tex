@@ -137,6 +137,10 @@ ARI\,=\,$0.521$\,$\pm$\,$0.104$,
 NMI\,=\,$0.686$\,$\pm$\,$0.071$,
 purity\,=\,$0.694$\,$\pm$\,$0.076$,
 adjacency F1\,=\,$0.356$, AUROC\,=\,$0.948$.
+The $\pm$ values are standard deviations across the 1{,}000 test batches
+for this single checkpoint, reflecting batch-to-batch variability in which
+images are drawn --- not variance across training seeds (reported in
+Table~\ref{tab:results}).
 In concrete terms, a purity of $0.694$ means that on average approximately
 5 out of 16 fragments per cluster are assigned to the wrong source image.
 
