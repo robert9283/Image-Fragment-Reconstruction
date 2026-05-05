@@ -192,7 +192,9 @@ from adjusting $\beta$ or $\lambda_{\text{same}}$ further.
 \paragraph{Pretrained encoder.}
 Replacing the trained-from-scratch CNN with a self-supervised encoder
 (e.g.\ DINOv2) would provide richer features at $16{\times}16$ resolution
-at no labelling cost, likely the highest-impact single change.
+at no labelling cost, likely the highest-impact single change. This was not
+pursued here in order to keep the solution self-contained and free of large
+pretrained dependencies.
 
 \paragraph{Topology-aware clustering.}
 The true clustering is more constrained than ``equal sizes'': each cluster's
