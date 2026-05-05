@@ -1,9 +1,24 @@
 #!/usr/bin/env Rscript
-# Unified 5-condition ANOVA for the hyperparameter study.
-# Produces LaTeX tables (saved to doc/) and a plot.
+# =============================================================================
+# anova_r.R — Welch one-way ANOVA for the 5-condition hyperparameter study
+# =============================================================================
 #
-# Run from project root:
+# Compares best-checkpoint ARI across five training configurations (5 seeds
+# each) to assess whether the same-image auxiliary loss and the loss-tilt
+# parameter beta have a statistically significant effect on clustering quality.
+#
+# Inputs:
+#   results.jsonl   — one JSON line per run, written by main.py
+#
+# Outputs (all written to doc/):
+#   tab_anova_summary.tex   — per-condition mean / SD / min / max
+#   tab_anova_omnibus.tex   — Welch one-way ANOVA F-test result
+#   tab_anova_contrasts.tex — two planned Welch t-tests with Cohen's d
+#   fig_anova_ari.pdf/.png  — jitter + mean ± SD plot
+#
+# Run from the project root:
 #   Rscript scripts/anova_r.R
+# =============================================================================
 
 suppressPackageStartupMessages({
   library(jsonlite)
@@ -12,8 +27,10 @@ suppressPackageStartupMessages({
   library(xtable)
 })
 
-# ── config ────────────────────────────────────────────────────────────────────
+# ── config -------------------------------------------------------------------- ----
 
+# Significance threshold; 0.10 rather than 0.05 because n=5 per condition
+# gives low power, and we treat this as an exploratory study.
 ALPHA <- 0.10
 
 RESULTS_PATH <- "results.jsonl"
@@ -46,17 +63,19 @@ COND_LABELS_TEX <- c(
   e = "(e) adj-only, $\\beta=1$"
 )
 
-# ── load data ─────────────────────────────────────────────────────────────────
+# ── load data ----------------------------------------------------------------- ----
 
 all_run_names <- unlist(COND_RUNS)
 
+# Read results.jsonl line by line; NULL fields (optional keys absent from some
+# runs) are replaced with NA before coercing to a data frame so bind_rows works.
 raw <- lapply(readLines(RESULTS_PATH), fromJSON)
 df_all <- bind_rows(lapply(raw, function(x) {
   x[sapply(x, is.null)] <- NA
   as.data.frame(x, stringsAsFactors = FALSE)
 }))
 
-# Keep only ANOVA runs; if a run appears multiple times take the last entry
+# Keep only ANOVA runs; if a run was resumed or re-logged, take the last entry.
 df <- df_all |>
   filter(run %in% all_run_names) |>
   group_by(run) |>
@@ -82,7 +101,7 @@ if (length(incomplete) > 0) {
           ". Results may be unreliable.")
 }
 
-# ── summary statistics ────────────────────────────────────────────────────────
+# ── summary statistics -------------------------------------------------------- ----
 
 summ <- df |>
   group_by(condition) |>
@@ -98,20 +117,25 @@ summ <- df |>
 cat("\nSummary statistics (best ARI):\n")
 print(summ)
 
-# ── pooled within-condition SD ────────────────────────────────────────────────
+# ── pooled within-condition SD ------------------------------------------------ ----
 
+# Pooled SD (hat_sigma) estimates the common within-condition variability.
+# It is used in the report to compute the minimum detectable difference (MDD):
+#   delta_min = 1.43 * hat_sigma  (80% power, two-sided t-test, alpha=0.10, n=5)
 pooled_sd <- summ |>
   summarise(s = sqrt(sum((n - 1) * sd^2) / sum(n - 1))) |>
   pull(s)
 
-delta_min <- 1.43 * pooled_sd   # MDD at 80% power (from tex formula)
+delta_min <- 1.43 * pooled_sd   # MDD at 80% power
 
 cat(sprintf("\nPooled within-condition SD (hat_sigma): %.4f\n", pooled_sd))
 cat(sprintf("MDD at 80%% power (1.43 * hat_sigma):   %.4f\n", delta_min))
 cat("  -> paste these values into the TODO in doc/approach.tex\n")
 
-# ── Welch one-way ANOVA (omnibus) ─────────────────────────────────────────────
+# ── Welch one-way ANOVA (omnibus) --------------------------------------------- ----
 
+# Welch's variant (var.equal = FALSE) is used because group variances may differ;
+# it is more robust than the classical F-test when homoscedasticity is uncertain.
 aov_res <- oneway.test(best_ari ~ condition, data = df, var.equal = FALSE)
 cat("\nWelch one-way ANOVA:\n")
 print(aov_res)
@@ -119,8 +143,12 @@ print(aov_res)
 omnibus_sig <- aov_res$p.value < ALPHA
 cat(sprintf("Omnibus significant at alpha=%.2f: %s\n", ALPHA, omnibus_sig))
 
-# ── planned contrasts (Welch two-sample t-tests) ──────────────────────────────
+# ── planned contrasts (Welch two-sample t-tests) ------------------------------ ----
 
+# Two pre-specified contrasts against the adjacency-only baseline (a):
+#   (c) vs (a) — does adding the same-image loss improve ARI?
+#   (e) vs (a) — does a larger beta (stronger positive reweighting) hurt ARI?
+# Using Welch t-tests (var.equal = FALSE) for the same robustness reason as above.
 ari_a <- df$best_ari[df$condition == "a"]
 ari_c <- df$best_ari[df$condition == "c"]
 ari_e <- df$best_ari[df$condition == "e"]
@@ -128,6 +156,11 @@ ari_e <- df$best_ari[df$condition == "e"]
 ct1 <- t.test(ari_c, ari_a, var.equal = FALSE)   # contrast 1: (c) vs (a)
 ct2 <- t.test(ari_e, ari_a, var.equal = FALSE)   # contrast 2: (e) vs (a)
 
+#' Compute pooled Cohen's d effect size between two groups.
+#'
+#' @param x Numeric vector for group 1.
+#' @param y Numeric vector for group 2.
+#' @return Scalar Cohen's d (positive if mean(x) > mean(y)).
 cohens_d <- function(x, y) {
   sp <- sqrt(((length(x) - 1) * var(x) + (length(y) - 1) * var(y)) /
                (length(x) + length(y) - 2))
@@ -159,9 +192,12 @@ names(contrasts_df)[3] <- "95\\% CI"
 cat("\nPlanned contrasts:\n")
 print(contrasts_df)
 
-# ── LaTeX tables ──────────────────────────────────────────────────────────────
+# ── LaTeX tables -------------------------------------------------------------- ----
 
 dir.create(OUT_DIR, showWarnings = FALSE, recursive = TRUE)
+
+# sanitize.text.function = identity prevents xtable from escaping LaTeX math
+# (dollar signs, backslashes) that we have deliberately embedded in the labels.
 
 ## 1. Summary table
 summ_tex <- summ |>
@@ -243,8 +279,9 @@ cat("  tab_anova_summary.tex\n")
 cat("  tab_anova_omnibus.tex\n")
 cat("  tab_anova_contrasts.tex\n")
 
-# ── plot ──────────────────────────────────────────────────────────────────────
+# ── plot ---------------------------------------------------------------------- ----
 
+# Individual seed results as jittered points; mean ± 1 SD as a diamond + error bar.
 plot_df <- df |>
   mutate(label = COND_LABELS_PLAIN[as.character(condition)])
 
