@@ -177,6 +177,14 @@ The failure-modes analysis shows that near-uniform or repetitive-texture
 patches produce similar embeddings regardless of source image, and are
 frequently mis-assigned.
 
+\paragraph{Where to focus next.}
+Since the pretext task is nearly solved (AUROC\,$>$\,0.95), further tuning
+of the loss has diminishing returns. The results suggest that the binding
+constraint is the quality of the fragment representations rather than the
+training objective. Further gains are therefore more likely to come from
+improving the encoder --- for instance via a pretrained backbone --- than
+from adjusting $\beta$ or $\lambda_{\text{same}}$ further.
+
 % ─────────────────────────────────────────────────────────────────────────────
 \section*{5. Next Steps}
 % ─────────────────────────────────────────────────────────────────────────────
