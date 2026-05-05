@@ -40,6 +40,10 @@ src/clustering_visualisation.png
 to_share/data/
 to_share/Case\ Study\ Assignment.pdf
 
+# local-only meta files
+todo.md
+CLAUDE.md
+
 # private summary, kept locally but not committed
 doc/summary.tex
 doc/summary.pdf
