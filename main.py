@@ -17,12 +17,34 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 def load_config(path='config.yaml'):
+    """
+    Load and return the YAML configuration file.
+
+    Args:
+        path (str): Path to the config file. Defaults to 'config.yaml'.
+
+    Returns:
+        dict: Parsed configuration dictionary.
+    """
     with open(path) as f:
         return yaml.safe_load(f)
 
 
 def n_neg_over_n_pos(n_images, grid):
-    """Constant ratio of non-adjacent to adjacent pairs for the given grid."""
+    """
+    Compute the constant ratio of non-adjacent to adjacent fragment pairs.
+
+    For a fixed grid size and number of images, the ratio is a constant
+    determined by the geometry. It is used to scale the positive-class weight
+    in the weighted BCE loss.
+
+    Args:
+        n_images (int): Number of images in a batch.
+        grid (int): Grid size (fragments per image = grid * grid).
+
+    Returns:
+        float: Ratio of negative pairs to positive (adjacent) pairs.
+    """
     n_pos = n_images * (2 * grid * (grid - 1))   # horizontal + vertical adjacencies
     n_pairs = (n_images * grid * grid) * (n_images * grid * grid - 1) // 2
     n_neg = n_pairs - n_pos
@@ -30,6 +52,20 @@ def n_neg_over_n_pos(n_images, grid):
 
 
 def load_model(name, cfg):
+    """
+    Instantiate the model specified by name using the given configuration.
+
+    Args:
+        name (str): Model identifier, e.g. 'fragment-adjacency-predictor'.
+        cfg (dict): Configuration dictionary containing hyperparameters such
+            as 'beta', 'lambda_adj', 'lambda_same', and 'n_images'.
+
+    Returns:
+        BaseModel: An initialised (untrained) model instance.
+
+    Raises:
+        ValueError: If the model name is not recognised.
+    """
     if name == 'fragment-adjacency-predictor':
         from src.fragment_adjacency_predictor import FragmentAdjacencyPredictor
         from src.fragments import GRID
@@ -47,8 +83,18 @@ def load_model(name, cfg):
 
 def setup_run_dir(cfg):
     """
-    Create runs/{run_name}/, snapshot the config, refresh the runs/latest symlink.
-    Returns the absolute path of the run directory.
+    Create the run directory, snapshot the config, and refresh the latest symlink.
+
+    Creates runs/{run_name}/ under the project root, writes a config.yaml
+    snapshot into it, and updates the runs/latest symlink to point to the
+    new run.
+
+    Args:
+        cfg (dict): Configuration dictionary. If 'run_name' is set, it is used
+            as the directory name; otherwise a timestamp-based name is generated.
+
+    Returns:
+        tuple[str, str]: Absolute path to the run directory and the run name.
     """
     run_name = cfg.get('run_name') or datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')
     run_dir  = os.path.join(PROJECT_ROOT, 'runs', run_name)
@@ -66,7 +112,20 @@ def setup_run_dir(cfg):
 
 
 def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, log_path):
-    """Append a one-line summary of this run to the top-level results.jsonl."""
+    """
+    Append a one-line JSON summary of a completed run to results.jsonl.
+
+    Reads the final entry from the training log to extract last-iteration
+    metrics, then writes a summary record to the top-level results.jsonl file.
+
+    Args:
+        run_name (str): Identifier of the run (used as the directory name).
+        cfg (dict): Configuration dictionary for this run.
+        best_ari (float): Best validation ARI achieved during training.
+        best_iter (int): Training iteration at which best_ari was reached.
+        total_minutes (float): Total wall-clock training time in minutes.
+        log_path (str): Path to the per-run training_log.jsonl file.
+    """
     with open(log_path) as f:
         entries = [json.loads(line) for line in f]
     last = entries[-1] if entries else {}
@@ -98,6 +157,14 @@ def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, lo
 
 
 def main():
+    """
+    Training entry point.
+
+    Loads config.yaml, sets random seeds if specified, creates the run
+    directory, trains the model, evaluates every eval_every iterations,
+    saves the best checkpoint, applies early stopping, and appends a
+    summary to results.jsonl.
+    """
     cfg = load_config()
     seed = cfg.get('seed')
     if seed is not None:
