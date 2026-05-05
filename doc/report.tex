@@ -76,7 +76,10 @@ The $160{\times}160$ matrix of scores $p_{ij}$ is used directly as a
 similarity matrix for \textbf{balanced spectral clustering}: spectral
 embedding (normalised graph Laplacian, $k=10$ components) followed by
 Hungarian-assignment balanced $k$-means that enforces exactly 16 fragments
-per cluster.
+per cluster. Each inference call processes one batch of 10 images
+($N=160$ fragments): $N$ encoder passes followed by $\binom{N}{2}=12{,}720$
+head evaluations ($\mathcal{O}(N^2)$) and an $\mathcal{O}(N^3)$ spectral
+decomposition. At this fixed scale both steps complete in under a second.
 
 \paragraph{Training details.}
 1.28M training images (ImageNet-64); each step samples 10 fresh images.
