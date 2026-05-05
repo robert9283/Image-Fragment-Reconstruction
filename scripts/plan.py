@@ -314,11 +314,11 @@ def _run_analysis():
     """
     Run the post-experiment analysis scripts after all runs finish.
 
-    Sequentially executes compare_runs.py and anova_analysis.py from the
+    Sequentially executes compare_runs.py from the
     project root so that summary tables and figures are up to date.
     """
     print("\n[plan] Running analysis scripts...")
-    for script in ['scripts/compare_runs.py', 'scripts/anova_analysis.py']:
+    for script in ['scripts/compare_runs.py']:
         subprocess.run([sys.executable, os.path.join(PROJECT_ROOT, script)], cwd=PROJECT_ROOT)
 
 

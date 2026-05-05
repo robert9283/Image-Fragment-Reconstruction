@@ -19,7 +19,7 @@ caffeinate -i bash scripts/run_overnight.sh    # run all pending; Ctrl-C stops a
 ```
 
 On resume, already-`done` runs are skipped automatically. After all runs finish,
-`compare_runs.py` and `anova_analysis.py` run automatically.
+`compare_runs.py` runs automatically.
 
 ## Final test evaluation
 
@@ -53,7 +53,6 @@ $\Delta_{\min}$ values needed to fill the TODO in `doc/approach.tex`.
 | Script | Purpose |
 |---|---|
 | `compare_runs.py [--plot]` | Table of all results from `results.jsonl`; `--plot` saves `runs_comparison.png` |
-| `anova_analysis.py` | Welch t-tests across the three ANOVA groups (adj-only / multi-task / same-only) |
 | `anova_r.R` | Unified 5-condition ANOVA (Welch one-way + planned contrasts); run **after all overnight runs complete** |
 | `roc_curves.py` | ROC/PR curves for selected runs |
 | `failure_modes.py` | Visualise worst-case clustering failures |
