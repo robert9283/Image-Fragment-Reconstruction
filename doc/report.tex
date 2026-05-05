@@ -71,12 +71,17 @@ $12{,}480/240 = 52$. We use weighted BCE with tilt parameter $\beta$:
 
 \paragraph{Multi-task loss.}
 Adjacency is a local signal; the downstream task is global clustering.
-A same-image loss term $\mathcal{L}_{\text{BCE}}^{\text{same}}$ is added to
-bridge this gap, acting on the same score $p_{ij}$:
+We observed that the model quickly reaches AUROC\,$>$\,0.95 on the pretext
+task, yet ARI remains well below 1 --- because adjacency only supervises
+nearest-neighbour pairs, leaving fragments from opposite corners of the same
+image as negatives. We hypothesised that adding a same-image loss term
+$\mathcal{L}_{\text{BCE}}^{\text{same}}$ would provide a less local signal,
+pulling all fragments from the same source together regardless of position:
 \[
   \mathcal{L} = \lambda_{\text{adj}}\,\mathcal{L}_{\text{WBCE}}(\beta)
               + \lambda_{\text{same}}\,\mathcal{L}_{\text{BCE}}^{\text{same}}.
 \]
+As the multi-seed study shows, the effect was present but modest.
 
 \paragraph{Inference.}
 To assign each fragment to its source image, the pairwise scores must be
