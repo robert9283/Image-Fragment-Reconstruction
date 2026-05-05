@@ -44,91 +44,134 @@ CHECKPOINT_PATH = os.environ.get('CHECKPOINT_PATH',
 
 N_SAMPLES = 1000  # number of independent test batches to evaluate
 
-# ── load config from the run directory that contains the checkpoint ───────────
-# The config snapshot is always written alongside the checkpoint by main.py,
-# so hyperparameters (beta, lambda_adj, lambda_same, n_images) are guaranteed
-# to match the weights being loaded.
-RUN_DIR = os.path.dirname(os.path.realpath(CHECKPOINT_PATH))
-with open(os.path.join(RUN_DIR, 'config.yaml')) as f:
-    cfg = yaml.safe_load(f)
 
-N_IMAGES = cfg.get('n_images', 10)  # images per batch (= number of clusters)
+def load_model_from_checkpoint(checkpoint_path):
+    """
+    Read config.yaml from the run directory and instantiate a loaded model.
 
-# ── data generator (test split, no augmentation) ─────────────────────────────
-dataset = Imagenet64(DATA_PATH)
-gen     = dataset.datagen_cls(batch_size=N_IMAGES, ds='test', augmentation=False)
+    The config snapshot written by main.py guarantees that hyperparameters
+    (beta, lambda_adj, lambda_same, n_images) exactly match the saved weights.
 
-# ── compute the negative-to-positive pair ratio for the WBCE loss weight ──────
-# For n_images=10 and a 4×4 grid this is always 52; recomputed here from the
-# config to stay correct if those values are ever changed.
-n_pos   = N_IMAGES * 2 * GRID * (GRID - 1)
-n_pairs = (N_IMAGES * GRID**2) * (N_IMAGES * GRID**2 - 1) // 2
-ratio   = (n_pairs - n_pos) / n_pos
+    Args:
+        checkpoint_path (str): Path to the checkpoint without extension.
 
-# ── instantiate model and load checkpoint ────────────────────────────────────
-model = FragmentAdjacencyPredictor(
-    pos_weight_adj = cfg.get('beta', 0.01923) * ratio,
-    lambda_adj     = cfg.get('lambda_adj',  1.0),
-    lambda_same    = cfg.get('lambda_same', 0.0),
-)
-model.load(CHECKPOINT_PATH)
-print(f"Loaded checkpoint from {CHECKPOINT_PATH}")
+    Returns:
+        tuple[FragmentAdjacencyPredictor, dict]: Loaded model and its config.
+    """
+    run_dir = os.path.dirname(os.path.realpath(checkpoint_path))
+    with open(os.path.join(run_dir, 'config.yaml')) as f:
+        cfg = yaml.safe_load(f)
 
-# accumulators — one entry per batch
-adjacency_results  = {'auroc': [], 'auprc': [], 'f1': []}
-clustering_results = {'ari': [], 'nmi': [], 'purity': []}
+    # recompute the negative-to-positive pair ratio used to scale the WBCE
+    # positive weight; for n_images=10 and a 4×4 grid this is always 52
+    n_images = cfg.get('n_images', 10)
+    n_pos    = n_images * 2 * GRID * (GRID - 1)
+    n_pairs  = (n_images * GRID**2) * (n_images * GRID**2 - 1) // 2
+    ratio    = (n_pairs - n_pos) / n_pos
 
-for i in range(N_SAMPLES):
-    # draw a fresh batch of N_IMAGES test images and slice into 16×16 fragments
+    model = FragmentAdjacencyPredictor(
+        pos_weight_adj = cfg.get('beta', 0.01923) * ratio,
+        lambda_adj     = cfg.get('lambda_adj',  1.0),
+        lambda_same    = cfg.get('lambda_same', 0.0),
+    )
+    model.load(checkpoint_path)
+    return model, cfg
+
+
+def evaluate_batch(model, gen, n_images):
+    """
+    Draw one batch from the generator and compute adjacency and clustering metrics.
+
+    Adjacency metrics (AUROC, AUPRC) are threshold-free; F1 uses threshold 0.5.
+    Clustering uses balanced spectral clustering, enforcing exactly GRID*GRID=16
+    fragments per cluster to prevent the over-fragmentation bias.
+
+    Args:
+        model (FragmentAdjacencyPredictor): Loaded model in eval mode.
+        gen: Test data generator yielding (images, _) tuples.
+        n_images (int): Number of images per batch (= number of clusters).
+
+    Returns:
+        tuple[dict, dict]:
+            adj  -- {'auroc': float, 'auprc': float, 'f1': float}
+            cl   -- {'ari': float, 'nmi': float, 'purity': float}
+    """
     images, _ = next(gen)
     fragments, true_labels = extract_fragments(np.array(images))
-    adjacency = build_adjacency(n_images=N_IMAGES)
+    adjacency = build_adjacency(n_images=n_images)
 
-    # ── adjacency prediction ──────────────────────────────────────────────────
-    # AUROC and AUPRC are threshold-free; F1 is computed at threshold 0.5
+    # adjacency prediction
     adj_metrics = model.evaluate_adjacency(fragments, adjacency)
     probs, idx_i, idx_j = model._pair_scores(fragments)
     targets = adjacency[idx_i.cpu().numpy(), idx_j.cpu().numpy()]
     preds   = (np.array(probs) >= 0.5).astype(int)
-    adjacency_results['auroc'].append(adj_metrics['auroc'])
-    adjacency_results['auprc'].append(adj_metrics['auprc'])
-    adjacency_results['f1'].append(float(f1_score(targets, preds, zero_division=0)))
-
-    # ── fragment clustering ───────────────────────────────────────────────────
-    # balanced spectral clustering: each of the k=10 clusters gets exactly
-    # GRID*GRID=16 fragments, preventing the over-fragmentation bias
-    similarity   = model.get_output(fragments)
-    pred_labels  = cluster(similarity, n_per_cluster=GRID * GRID)
-    cl_metrics   = compute_metrics(pred_labels, true_labels)
-    for key, val in cl_metrics.items():
-        clustering_results[key].append(val)
-
-    # print running averages every 100 batches
-    if (i + 1) % 100 == 0:
-        print(f"[{i + 1}/{N_SAMPLES}]  ARI={np.mean(clustering_results['ari']):.3f}  F1={np.mean(adjacency_results['f1']):.3f}")
-
-# ── aggregate across all batches and save ────────────────────────────────────
-# ARI, NMI, and purity are reported as mean ± std to capture per-batch variance
-results = {
-    'adjacency_prediction': {
-        'auroc': round(float(np.mean(adjacency_results['auroc'])), 4),
-        'auprc': round(float(np.mean(adjacency_results['auprc'])), 4),
-        'f1':    round(float(np.mean(adjacency_results['f1'])),    4),
-    },
-    'fragment_clustering': {
-        'ari_mean':    round(float(np.mean(clustering_results['ari'])),    4),
-        'ari_std':     round(float(np.std(clustering_results['ari'])),     4),
-        'nmi_mean':    round(float(np.mean(clustering_results['nmi'])),    4),
-        'nmi_std':     round(float(np.std(clustering_results['nmi'])),     4),
-        'purity_mean': round(float(np.mean(clustering_results['purity'])), 4),
-        'purity_std':  round(float(np.std(clustering_results['purity'])),  4),
+    adj = {
+        'auroc': adj_metrics['auroc'],
+        'auprc': adj_metrics['auprc'],
+        'f1':    float(f1_score(targets, preds, zero_division=0)),
     }
-}
 
-out_path = os.path.join(RUN_DIR, 'test_metrics.json')
-with open(out_path, 'w') as f:
-    json.dump(results, f, indent=2)
+    # fragment clustering
+    similarity  = model.get_output(fragments)
+    pred_labels = cluster(similarity, n_per_cluster=GRID * GRID)
+    cl = compute_metrics(pred_labels, true_labels)
 
-print(f"\n── Results ──────────────────────────────────────────")
-print(json.dumps(results, indent=2))
-print(f"\nSaved: {out_path}")
+    return adj, cl
+
+
+def main():
+    """
+    Evaluate the model over N_SAMPLES batches and save aggregated metrics.
+
+    Loads the model from CHECKPOINT_PATH, runs evaluate_batch() N_SAMPLES
+    times, aggregates results, and writes test_metrics.json to the run directory.
+    """
+    model, cfg = load_model_from_checkpoint(CHECKPOINT_PATH)
+    n_images   = cfg.get('n_images', 10)
+    run_dir    = os.path.dirname(os.path.realpath(CHECKPOINT_PATH))
+    print(f"Loaded checkpoint from {CHECKPOINT_PATH}")
+
+    dataset = Imagenet64(DATA_PATH)
+    gen     = dataset.datagen_cls(batch_size=n_images, ds='test', augmentation=False)
+
+    # accumulators — one entry per batch
+    adjacency_results  = {'auroc': [], 'auprc': [], 'f1': []}
+    clustering_results = {'ari': [], 'nmi': [], 'purity': []}
+
+    for i in range(N_SAMPLES):
+        adj, cl = evaluate_batch(model, gen, n_images)
+        for k, v in adj.items(): adjacency_results[k].append(v)
+        for k, v in cl.items():  clustering_results[k].append(v)
+
+        # print running averages every 100 batches
+        if (i + 1) % 100 == 0:
+            print(f"[{i + 1}/{N_SAMPLES}]  ARI={np.mean(clustering_results['ari']):.3f}  F1={np.mean(adjacency_results['f1']):.3f}")
+
+    # aggregate across all batches; ARI/NMI/purity reported as mean ± std
+    results = {
+        'adjacency_prediction': {
+            'auroc': round(float(np.mean(adjacency_results['auroc'])), 4),
+            'auprc': round(float(np.mean(adjacency_results['auprc'])), 4),
+            'f1':    round(float(np.mean(adjacency_results['f1'])),    4),
+        },
+        'fragment_clustering': {
+            'ari_mean':    round(float(np.mean(clustering_results['ari'])),    4),
+            'ari_std':     round(float(np.std(clustering_results['ari'])),     4),
+            'nmi_mean':    round(float(np.mean(clustering_results['nmi'])),    4),
+            'nmi_std':     round(float(np.std(clustering_results['nmi'])),     4),
+            'purity_mean': round(float(np.mean(clustering_results['purity'])), 4),
+            'purity_std':  round(float(np.std(clustering_results['purity'])),  4),
+        }
+    }
+
+    out_path = os.path.join(run_dir, 'test_metrics.json')
+    with open(out_path, 'w') as f:
+        json.dump(results, f, indent=2)
+
+    print(f"\n── Results ──────────────────────────────────────────")
+    print(json.dumps(results, indent=2))
+    print(f"\nSaved: {out_path}")
+
+
+if __name__ == '__main__':
+    main()

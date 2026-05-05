@@ -1,6 +1,21 @@
 """
-Submission script 2: visualise clustering on a single sample.
-Edit DATA_PATH and CHECKPOINT_PATH, then run directly.
+Submission script 2: visualise the clustering result on a single test batch.
+
+Loads the best checkpoint, draws one batch of N_IMAGES test images, runs the
+model and balanced spectral clustering, then produces a two-row figure:
+
+  Row 1 — ground-truth: fragments reassembled into their original source images.
+  Row 2 — predicted:    fragments reassembled according to the model's clusters,
+                        after Hungarian matching of cluster IDs to source IDs.
+
+The figure is saved as clustering_visualisation.png in the src/ directory.
+Metrics (ARI, NMI, purity) for this single batch are printed to stdout.
+
+Usage:
+    python src/script2_visualise.py
+
+Override paths via environment variables if needed:
+    DATA_PATH=path/to/data CHECKPOINT_PATH=runs/my_run/model python src/script2_visualise.py
 """
 import sys
 import os
@@ -55,14 +70,39 @@ print(f"ARI={metrics['ari']:.3f}  NMI={metrics['nmi']:.3f}  purity={metrics['pur
 
 
 def fragments_to_image(frags):
-    """frags: (16, 16, 16, 3) in row-major grid order → (64, 64, 3)"""
+    """
+    Reassemble 16 fragments in row-major order into a single 64×64 image.
+
+    Args:
+        frags (np.ndarray): Array of shape (16, 16, 16, 3) containing the
+            GRID*GRID fragments of one image in row-major (top-left to
+            bottom-right) order.
+
+    Returns:
+        np.ndarray: Reconstructed image of shape (64, 64, 3).
+    """
     return (frags.reshape(GRID, GRID, FRAGMENT_SIZE, FRAGMENT_SIZE, 3)
                  .transpose(0, 2, 1, 3, 4)
                  .reshape(64, 64, 3))
 
 
 def align_labels(true_labels, pred_labels, k=N_IMAGES):
-    """Hungarian matching: map predicted cluster ids to true image ids."""
+    """
+    Map predicted cluster IDs to true source-image IDs via Hungarian matching.
+
+    Builds a cost matrix where cost[t, p] is the negative overlap between
+    true class t and predicted cluster p, then finds the assignment that
+    maximises total overlap.
+
+    Args:
+        true_labels (np.ndarray): Ground-truth source-image indices, shape (N,).
+        pred_labels (np.ndarray): Predicted cluster assignments, shape (N,).
+        k (int): Number of clusters / source images. Default N_IMAGES.
+
+    Returns:
+        np.ndarray: Remapped predicted labels of shape (N,), aligned so that
+            cluster IDs correspond to the best-matching true source-image IDs.
+    """
     cost = np.zeros((k, k))
     for t in range(k):
         for p in range(k):
