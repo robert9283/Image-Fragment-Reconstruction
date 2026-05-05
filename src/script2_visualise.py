@@ -40,33 +40,62 @@ CHECKPOINT_PATH = os.environ.get('CHECKPOINT_PATH',
                     os.path.join(os.path.dirname(__file__), '..', 'runs', 'latest', 'model'))
 # ─────────────────────────────────────────────────────────────────────────────
 
-# config is read from the run directory (parent of checkpoint path)
-RUN_DIR = os.path.dirname(os.path.realpath(CHECKPOINT_PATH))
-with open(os.path.join(RUN_DIR, 'config.yaml')) as f:
-    cfg = yaml.safe_load(f)
 
-N_IMAGES = cfg.get('n_images', 10)
+def load_model_from_checkpoint(checkpoint_path):
+    """
+    Read config.yaml from the run directory and instantiate a loaded model.
 
-n_pos   = N_IMAGES * 2 * GRID * (GRID - 1)
-n_pairs = (N_IMAGES * GRID**2) * (N_IMAGES * GRID**2 - 1) // 2
-ratio   = (n_pairs - n_pos) / n_pos
+    Args:
+        checkpoint_path (str): Path to the checkpoint without extension.
 
-dataset = Imagenet64(DATA_PATH)
-gen     = dataset.datagen_cls(batch_size=N_IMAGES, ds='test', augmentation=False)
-images, _ = next(gen)
-fragments, true_labels = extract_fragments(np.array(images))
+    Returns:
+        tuple[FragmentAdjacencyPredictor, dict]: Loaded model and its config.
+    """
+    run_dir = os.path.dirname(os.path.realpath(checkpoint_path))
+    with open(os.path.join(run_dir, 'config.yaml')) as f:
+        cfg = yaml.safe_load(f)
 
-model = FragmentAdjacencyPredictor(
-    pos_weight_adj = cfg.get('beta', 0.01923) * ratio,
-    lambda_adj     = cfg.get('lambda_adj',  1.0),
-    lambda_same    = cfg.get('lambda_same', 0.0),
-)
-model.load(CHECKPOINT_PATH)
-model_output = model.get_output(fragments)
-pred_labels  = cluster(model_output, n_per_cluster=GRID * GRID)
-metrics      = compute_metrics(pred_labels, true_labels)
+    n_images = cfg.get('n_images', 10)
+    n_pos    = n_images * 2 * GRID * (GRID - 1)
+    n_pairs  = (n_images * GRID**2) * (n_images * GRID**2 - 1) // 2
+    ratio    = (n_pairs - n_pos) / n_pos
 
-print(f"ARI={metrics['ari']:.3f}  NMI={metrics['nmi']:.3f}  purity={metrics['purity']:.3f}")
+    model = FragmentAdjacencyPredictor(
+        pos_weight_adj = cfg.get('beta', 0.01923) * ratio,
+        lambda_adj     = cfg.get('lambda_adj',  1.0),
+        lambda_same    = cfg.get('lambda_same', 0.0),
+    )
+    model.load(checkpoint_path)
+    return model, cfg
+
+
+def run_clustering(model, cfg, data_path):
+    """
+    Draw one test batch and run the model and balanced spectral clustering.
+
+    Args:
+        model (FragmentAdjacencyPredictor): Loaded model.
+        cfg (dict): Configuration dictionary (uses 'n_images').
+        data_path (str): Path to the ImageNet-64 dataset directory.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
+            fragments   -- (N, 16, 16, 3) fragment array.
+            true_labels -- (N,) ground-truth source-image indices.
+            pred_labels -- (N,) cluster assignments from balanced spectral clustering.
+            metrics     -- {'ari': float, 'nmi': float, 'purity': float}.
+    """
+    n_images = cfg.get('n_images', 10)
+    dataset  = Imagenet64(data_path)
+    gen      = dataset.datagen_cls(batch_size=n_images, ds='test', augmentation=False)
+    images, _ = next(gen)
+    fragments, true_labels = extract_fragments(np.array(images))
+
+    # balanced spectral clustering: enforce exactly GRID*GRID fragments per cluster
+    model_output = model.get_output(fragments)
+    pred_labels  = cluster(model_output, n_per_cluster=GRID * GRID)
+    metrics      = compute_metrics(pred_labels, true_labels)
+    return fragments, true_labels, pred_labels, metrics
 
 
 def fragments_to_image(frags):
@@ -86,7 +115,7 @@ def fragments_to_image(frags):
                  .reshape(64, 64, 3))
 
 
-def align_labels(true_labels, pred_labels, k=N_IMAGES):
+def align_labels(true_labels, pred_labels, k=10):
     """
     Map predicted cluster IDs to true source-image IDs via Hungarian matching.
 
@@ -97,7 +126,7 @@ def align_labels(true_labels, pred_labels, k=N_IMAGES):
     Args:
         true_labels (np.ndarray): Ground-truth source-image indices, shape (N,).
         pred_labels (np.ndarray): Predicted cluster assignments, shape (N,).
-        k (int): Number of clusters / source images. Default N_IMAGES.
+        k (int): Number of clusters / source images. Default 10.
 
     Returns:
         np.ndarray: Remapped predicted labels of shape (N,), aligned so that
@@ -112,27 +141,65 @@ def align_labels(true_labels, pred_labels, k=N_IMAGES):
     return np.array([mapping[p] for p in pred_labels])
 
 
-aligned = align_labels(true_labels, pred_labels)
+def make_figure(fragments, true_labels, aligned_labels, metrics, n_images, out_path):
+    """
+    Produce and save the two-row visualisation figure.
 
-fig, axes = plt.subplots(2, N_IMAGES, figsize=(20, 4))
-fig.suptitle(f'Top: ground truth    Bottom: predicted clusters    ARI={metrics["ari"]:.3f}', fontsize=11)
+    Row 1 shows each source image reconstructed from its ground-truth fragments.
+    Row 2 shows the same reconstruction using the model's predicted cluster
+    assignments (after Hungarian label alignment). Clusters that ended up with
+    a non-standard number of fragments display a count instead of an image.
 
-for img_idx in range(N_IMAGES):
-    true_frags = fragments[true_labels == img_idx]
-    axes[0, img_idx].imshow(np.clip(fragments_to_image(true_frags), 0, 1))
-    axes[0, img_idx].axis('off')
-    axes[0, img_idx].set_title(f'img {img_idx}', fontsize=8)
+    Args:
+        fragments (np.ndarray): All fragments, shape (N, 16, 16, 3).
+        true_labels (np.ndarray): Ground-truth source-image indices, shape (N,).
+        aligned_labels (np.ndarray): Hungarian-aligned predicted labels, shape (N,).
+        metrics (dict): {'ari': float, 'nmi': float, 'purity': float}.
+        n_images (int): Number of source images (= number of columns in the figure).
+        out_path (str): File path where the PNG will be saved.
+    """
+    fig, axes = plt.subplots(2, n_images, figsize=(20, 4))
+    fig.suptitle(
+        f'Top: ground truth    Bottom: predicted clusters    ARI={metrics["ari"]:.3f}',
+        fontsize=11,
+    )
 
-    pred_frags = fragments[aligned == img_idx]
-    if len(pred_frags) == GRID * GRID:
-        axes[1, img_idx].imshow(np.clip(fragments_to_image(pred_frags), 0, 1))
-    else:
-        axes[1, img_idx].text(0.5, 0.5, f'{len(pred_frags)} frags',
-                              ha='center', va='center', transform=axes[1, img_idx].transAxes)
-    axes[1, img_idx].axis('off')
-    axes[1, img_idx].set_title(f'pred {img_idx}', fontsize=8)
+    for img_idx in range(n_images):
+        # top row: ground-truth reconstruction
+        true_frags = fragments[true_labels == img_idx]
+        axes[0, img_idx].imshow(np.clip(fragments_to_image(true_frags), 0, 1))
+        axes[0, img_idx].axis('off')
+        axes[0, img_idx].set_title(f'img {img_idx}', fontsize=8)
 
-plt.tight_layout()
-out_path = os.path.join(os.path.dirname(__file__), 'clustering_visualisation.png')
-plt.savefig(out_path, dpi=150)
-print(f"Saved: {out_path}")
+        # bottom row: predicted reconstruction (fall back to text if wrong count)
+        pred_frags = fragments[aligned_labels == img_idx]
+        if len(pred_frags) == GRID * GRID:
+            axes[1, img_idx].imshow(np.clip(fragments_to_image(pred_frags), 0, 1))
+        else:
+            axes[1, img_idx].text(0.5, 0.5, f'{len(pred_frags)} frags',
+                                  ha='center', va='center',
+                                  transform=axes[1, img_idx].transAxes)
+        axes[1, img_idx].axis('off')
+        axes[1, img_idx].set_title(f'pred {img_idx}', fontsize=8)
+
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    print(f"Saved: {out_path}")
+
+
+def main():
+    """
+    Load the model, cluster one test batch, and save the visualisation figure.
+    """
+    model, cfg = load_model_from_checkpoint(CHECKPOINT_PATH)
+    fragments, true_labels, pred_labels, metrics = run_clustering(model, cfg, DATA_PATH)
+
+    print(f"ARI={metrics['ari']:.3f}  NMI={metrics['nmi']:.3f}  purity={metrics['purity']:.3f}")
+
+    aligned  = align_labels(true_labels, pred_labels, k=cfg.get('n_images', 10))
+    out_path = os.path.join(os.path.dirname(__file__), 'clustering_visualisation.png')
+    make_figure(fragments, true_labels, aligned, metrics, cfg.get('n_images', 10), out_path)
+
+
+if __name__ == '__main__':
+    main()
