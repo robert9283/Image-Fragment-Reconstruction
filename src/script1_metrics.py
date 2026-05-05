@@ -1,7 +1,25 @@
 """
-Submission script 1: collect metrics over N_SAMPLES samples.
-Edit DATA_PATH and CHECKPOINT_PATH, then run directly.
-Saves results to results.json.
+Submission script 1: evaluate the model on N_SAMPLES test batches and report metrics.
+
+This script measures two things on the held-out test split:
+
+  1. Adjacency prediction  — how well the model scores spatially adjacent
+     fragment pairs higher than non-adjacent ones (AUROC, AUPRC, F1 at
+     threshold 0.5).
+
+  2. Fragment clustering   — how accurately balanced spectral clustering
+     reconstructs the original source-image groupings (ARI, NMI, purity,
+     each reported as mean ± std over N_SAMPLES batches).
+
+Configuration is read from the config.yaml snapshot stored alongside the
+checkpoint. Results are printed to stdout and saved as test_metrics.json in
+the run directory.
+
+Usage:
+    python src/script1_metrics.py
+
+Override paths via environment variables if needed:
+    DATA_PATH=path/to/data CHECKPOINT_PATH=runs/my_run/model python src/script1_metrics.py
 """
 import sys
 import os
