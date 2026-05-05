@@ -12,6 +12,7 @@ Functions:
     load_model        -- Instantiate the model specified in the config.
     setup_run_dir     -- Create the run directory and refresh the latest symlink.
     append_results_summary -- Append a one-line run summary to results.jsonl.
+    evaluate          -- Run n_eval_batches of validation and return averaged metrics.
     main              -- Full training loop with evaluation and early stopping.
 """
 import sys
@@ -172,6 +173,60 @@ def append_results_summary(run_name, cfg, best_ari, best_iter, total_minutes, lo
         f.write(json.dumps(summary) + '\n')
 
 
+def evaluate(model, val_gen, cfg):
+    """
+    Run a full validation pass and return averaged metrics.
+
+    Draws n_eval_batches fresh batches from val_gen, runs adjacency prediction
+    and spectral clustering on each, and returns the mean of each metric across
+    all batches. If the same-image head is active (lambda_same > 0), same-image
+    AUROC/AUPRC are also returned.
+
+    Args:
+        model (BaseModel): Trained (or partially trained) model instance.
+        val_gen: Validation data generator yielding (images, _) tuples.
+        cfg (dict): Configuration dictionary. Relevant keys:
+            n_eval_batches (int): Number of batches to average over.
+            n_images (int): Batch size in images.
+            balanced_clustering (bool): Whether to enforce equal cluster sizes.
+            lambda_same (float): If > 0, the same-image head is evaluated too.
+
+    Returns:
+        tuple[dict, dict, dict | None]:
+            adj_metrics  -- {'auroc': float, 'auprc': float}
+            cl_metrics   -- {'ari': float, 'nmi': float, 'purity': float}
+            same_metrics -- {'auroc': float, 'auprc': float}, or None if
+                            lambda_same == 0.
+    """
+    n_eval        = cfg.get('n_eval_batches', 1)
+    n_per_cluster = GRID * GRID if cfg.get('balanced_clustering', False) else None
+    multitask     = float(cfg.get('lambda_same', 0.0)) > 0
+
+    adj_acc  = {'auroc': [], 'auprc': []}
+    same_acc = {'auroc': [], 'auprc': []} if multitask else None
+    cl_acc   = {'ari': [], 'nmi': [], 'purity': []}
+
+    for _ in range(n_eval):
+        val_images, _ = next(val_gen)
+        val_fragments, val_labels = extract_fragments(np.array(val_images))
+        val_adjacency = build_adjacency(n_images=cfg['n_images'])
+
+        a = model.evaluate_adjacency(val_fragments, val_adjacency)
+        c = compute_metrics(cluster(model.get_output(val_fragments),
+                                    n_per_cluster=n_per_cluster), val_labels)
+        for k in adj_acc: adj_acc[k].append(a[k])
+        for k in cl_acc:  cl_acc[k].append(c[k])
+        if multitask:
+            s = model.evaluate_same_image(val_fragments, val_labels)
+            for k in same_acc: same_acc[k].append(s[k])
+
+    adj_metrics  = {k: float(np.mean(v)) for k, v in adj_acc.items()}
+    cl_metrics   = {k: float(np.mean(v)) for k, v in cl_acc.items()}
+    same_metrics = ({k: float(np.mean(v)) for k, v in same_acc.items()}
+                    if multitask else None)
+    return adj_metrics, cl_metrics, same_metrics
+
+
 def main():
     """
     Training entry point.
@@ -218,31 +273,9 @@ def main():
         train_time_acc += time.time() - t0
 
         if (iteration + 1) % cfg['eval_every'] == 0:
-            n_eval = cfg.get('n_eval_batches', 1)
-            n_per_cluster = GRID * GRID if cfg.get('balanced_clustering', False) else None
-
             t0 = time.time()
-            multitask = float(cfg.get('lambda_same', 0.0)) > 0
-            adj_acc  = {'auroc': [], 'auprc': []}
-            same_acc = {'auroc': [], 'auprc': []} if multitask else None
-            cl_acc   = {'ari': [], 'nmi': [], 'purity': []}
-            for _ in range(n_eval):
-                val_images, _ = next(val_gen)
-                val_fragments, val_labels = extract_fragments(np.array(val_images))
-                val_adjacency = build_adjacency(n_images=cfg['n_images'])
-                a = model.evaluate_adjacency(val_fragments, val_adjacency)
-                c = compute_metrics(cluster(model.get_output(val_fragments),
-                                            n_per_cluster=n_per_cluster), val_labels)
-                for k in adj_acc: adj_acc[k].append(a[k])
-                for k in cl_acc:  cl_acc[k].append(c[k])
-                if multitask:
-                    s = model.evaluate_same_image(val_fragments, val_labels)
-                    for k in same_acc: same_acc[k].append(s[k])
-            adj_metrics  = {k: float(np.mean(v)) for k, v in adj_acc.items()}
-            cl_metrics   = {k: float(np.mean(v)) for k, v in cl_acc.items()}
-            same_metrics = ({k: float(np.mean(v)) for k, v in same_acc.items()}
-                            if multitask else None)
-            eval_time    = time.time() - t0
+            adj_metrics, cl_metrics, same_metrics = evaluate(model, val_gen, cfg)
+            eval_time = time.time() - t0
 
             improved = cl_metrics['ari'] > best_ari
             if improved:
