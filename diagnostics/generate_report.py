@@ -40,6 +40,14 @@ PLOTS = [
 ]
 
 def write_tex():
+    """
+    Generate the LaTeX source for the debug report and write it to report.tex.
+
+    Iterates over the PLOTS list; for each entry whose PNG file exists in the
+    diagnostics directory, emits a LaTeX figure environment with caption.
+    Missing PNG files are skipped with a warning. Sections are started
+    automatically when the section name changes between consecutive entries.
+    """
     lines = [
         r'\documentclass[12pt,a4paper]{article}',
         r'\usepackage[utf8]{inputenc}',
@@ -85,6 +93,14 @@ def write_tex():
 
 
 def compile_tex():
+    """
+    Compile report.tex to PDF using pdflatex (two passes for cross-references).
+
+    Runs pdflatex twice with -interaction=nonstopmode so compilation never
+    blocks on errors. Prints the output path on success, or the last 1000
+    characters of the compiler log on failure. Cleans up auxiliary files
+    (.aux, .log, .out, .toc) after compilation.
+    """
     for _ in range(2):
         result = subprocess.run(
             ['pdflatex', '-interaction=nonstopmode', '-output-directory', DEBUG_DIR, TEX_PATH],
