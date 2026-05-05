@@ -1,0 +1,14 @@
+data_path: to_share/data
+model: fragment-adjacency-predictor
+run_name: adj_beta1_seed_3
+notes: adj-only beta=1 (cond e)
+n_images: 10
+max_iterations: 25000
+eval_every: 250
+patience: 10
+beta: 1.0
+lambda_adj: 1.0
+lambda_same: 0.0
+n_eval_batches: 20
+balanced_clustering: true
+seed: 3

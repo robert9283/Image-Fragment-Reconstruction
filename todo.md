@@ -1,12 +1,32 @@
 # Open work items
 
-- ablate the comparison-head input. Three runs at otherwise-identical settings:
-    - Run 1: current four-term combination `[a-b, a*b, a, b]` (1024-dim head)
-    - Run 2: plain concatenation `[a, b]` only (512-dim head)
-    - Run 3: difference + product `[a-b, a*b]` only (512-dim head)
-  This will tell us whether the InferSent four-term construction actually helps
-  on images or whether a simpler combination is just as good. ~75 min of
-  training time total.
+## Submission
+
+- Create a GitHub release on `main` with `runs/multitask_10_seed_2/model.pt` and
+  `runs/multitask_10_seed_2/config.yaml` as release assets (`gh release create`)
+- Push final state to remote and open PR / merge to `main`
+
+## doc/report_long.tex
+
+- Regenerate Figure 5 "Distribution of per-pair confidence scores" with the
+  current best checkpoint: `python scripts/weight_distribution.py` — then recompile
+- Cross-reference / section number check after the §9.3–9.5 deletion
+
+## Housekeeping
+
+- Delete stale run folders (untracked, pre-refactor): `multitask_01`, `multitask_05`,
+  `multitask_10`, `multitask_15`, `same_only`, `noise_seed_0..4`, `test_single_head`,
+  `test_single_head_full`, `balanced_multibatch`, `plain_bce`, `plain_bce_baseline`,
+  `wbce_beta_03`, `wbce_beta_1`
+- `run.sh`: check comments are still accurate end-to-end
+- Refactoring: move `to_share/` into `src/` — skipped; touches 25+ config files and
+  8 scripts for minimal gain; `to_share/` matches the assignment's folder name
+
+## Optional / lower priority
+
+- Ablate comparison-head input (3 runs, ~75 min): current 4-term `[a-b, a*b, a, b]`
+  vs plain `[a, b]` vs `[a-b, a*b]`
+
 
 ## Done
 

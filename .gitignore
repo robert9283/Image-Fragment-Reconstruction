@@ -14,9 +14,9 @@ doc/*.run.xml
 doc/*.toc
 
 # debug generated outputs
-debug/out_*.png
-debug/report.tex
-debug/report.pdf
+diagnostics/out_*.png
+diagnostics/report.tex
+diagnostics/report.pdf
 
 # per-run artifacts: ignore checkpoints and logs, but keep configs
 runs/*/model.pt
@@ -43,3 +43,13 @@ to_share/Case\ Study\ Assignment.pdf
 # private summary, kept locally but not committed
 doc/summary.tex
 doc/summary.pdf
+doc/claude_opus_thoughts.md
+
+# presentation and prep notes (local only)
+doc/presentation.tex
+doc/presentation.pdf
+doc/presentation.nav
+doc/presentation.snm
+doc/approach_backup.pdf
+doc/prep_notes.tex
+doc/prep_notes.pdf

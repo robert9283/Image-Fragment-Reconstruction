@@ -1,0 +1,65 @@
+% Standalone TikZ figure: schematic of the Siamese fragment-pair model.
+%
+% Include in another document with:
+%     \input{fig_architecture.tex}
+%
+% Requires the host document to load \usepackage{tikz} and the libraries
+% positioning, arrows.meta, fit. Compile fig_architecture_standalone.tex
+% to preview.
+
+\begin{tikzpicture}[
+    node distance = 6mm and 7mm,
+    frag/.style   = {draw, thick, rounded corners=2pt, minimum width=11mm,
+                     minimum height=11mm, fill=blue!10, font=\small},
+    enc/.style    = {draw, thick, rounded corners=3pt, minimum width=18mm,
+                     minimum height=10mm, fill=teal!15, font=\small},
+    emb/.style    = {draw, thick, rounded corners=2pt, minimum width=15mm,
+                     minimum height=8mm, fill=teal!8, font=\footnotesize},
+    head/.style   = {draw, thick, rounded corners=3pt, minimum width=22mm,
+                     minimum height=10mm, fill=orange!15, font=\small},
+    output/.style = {draw, thick, circle, minimum size=10mm,
+                     fill=red!10, font=\small, inner sep=0pt},
+    arr/.style    = {-{Latex[length=2mm]}, thick},
+    note/.style   = {font=\footnotesize, color=black!70},
+]
+
+% --- inputs: two fragments ---
+\node[frag] (f1) {$f_i$};
+\node[frag, below=12mm of f1] (f2) {$f_j$};
+
+% --- shared encoder (drawn once, with arrows from both fragments) ---
+\node[enc, right=of f1, yshift=-7mm] (enc) {CNN encoder};
+\node[note, above=0.5mm of enc] {(shared weights)};
+
+% --- per-fragment embeddings ---
+\node[emb, right=of enc, yshift=8mm]  (e1) {$\mathbf{a} \in \mathbb{R}^{256}$};
+\node[emb, right=of enc, yshift=-8mm] (e2) {$\mathbf{b} \in \mathbb{R}^{256}$};
+
+% --- combination block ---
+\node[head, right=12mm of e1, yshift=-8mm,
+      align=center] (combine)
+      {combine:\\[1pt] $[\mathbf{a}-\mathbf{b}\,\|\,\mathbf{a}\odot\mathbf{b}\,\|\,\mathbf{a}\,\|\,\mathbf{b}]$\\[1pt]
+       $\in \mathbb{R}^{1024}$};
+
+% --- single comparison head ---
+\node[head, right=of combine, align=center] (head)
+    {comparison\\MLP};
+
+% --- output ---
+\node[output, right=of head] (p) {$p_{ij}$};
+
+% --- arrows ---
+\draw[arr] (f1) -- (enc);
+\draw[arr] (f2) -- (enc);
+\draw[arr] (enc) -- (e1);
+\draw[arr] (enc) -- (e2);
+\draw[arr] (e1) -- (combine);
+\draw[arr] (e2) -- (combine);
+\draw[arr] (combine) -- (head);
+\draw[arr] (head) -- (p);
+
+% --- annotation under output ---
+\node[note, below=1mm of p, align=center]
+    {pair\\confidence};
+
+\end{tikzpicture}
