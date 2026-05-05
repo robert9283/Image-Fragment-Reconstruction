@@ -53,6 +53,15 @@ PLANNED_RUNS = [
 
 
 def get_conn():
+    """
+    Open (or create) the SQLite plan database and return a connection.
+
+    Creates the 'runs' table if it does not exist yet. The connection uses
+    sqlite3.Row as its row factory so columns are accessible by name.
+
+    Returns:
+        sqlite3.Connection: Open database connection with SCHEMA applied.
+    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute(SCHEMA)
@@ -63,6 +72,17 @@ def get_conn():
 # ── commands ──────────────────────────────────────────────────────────────────
 
 def cmd_init(args):
+    """
+    Populate the plan database with all entries in PLANNED_RUNS.
+
+    Skips runs that already exist (by unique run_name). Prints a summary of
+    how many new rows were inserted, then calls cmd_list to show the full
+    table.
+
+    Args:
+        args: Parsed argparse namespace (not used; present for dispatch
+            uniformity).
+    """
     conn = get_conn()
     inserted = 0
     for r in PLANNED_RUNS:
@@ -79,6 +99,17 @@ def cmd_init(args):
 
 
 def cmd_list(args):
+    """
+    Print all runs in the plan database, one per row.
+
+    Columns shown: id, run_name, group, lambda_adj, lambda_same, beta, seed,
+    status. A count summary (pending / running / done) is printed below the
+    table.
+
+    Args:
+        args: Parsed argparse namespace (not used; present for dispatch
+            uniformity).
+    """
     conn = get_conn()
     rows = conn.execute("SELECT * FROM runs ORDER BY id").fetchall()
     if not rows:
@@ -100,6 +131,15 @@ def cmd_list(args):
 
 
 def cmd_mark_done(args):
+    """
+    Manually mark a run as 'done' in the plan database.
+
+    Useful when a run was completed outside of cmd_run_all (e.g. run manually
+    or on a different machine) and needs to be recorded as finished.
+
+    Args:
+        args: Parsed argparse namespace; must have attribute 'name' (run_name).
+    """
     conn = get_conn()
     conn.execute("UPDATE runs SET status='done' WHERE run_name=?", (args.name,))
     conn.commit()
@@ -107,6 +147,12 @@ def cmd_mark_done(args):
 
 
 def cmd_reset(args):
+    """
+    Reset a run's status to 'pending' so it will be re-executed by cmd_run_all.
+
+    Args:
+        args: Parsed argparse namespace; must have attribute 'name' (run_name).
+    """
     conn = get_conn()
     conn.execute("UPDATE runs SET status='pending' WHERE run_name=?", (args.name,))
     conn.commit()
@@ -114,6 +160,13 @@ def cmd_reset(args):
 
 
 def cmd_add(args):
+    """
+    Insert a new run into the plan database with the given hyperparameters.
+
+    Args:
+        args: Parsed argparse namespace; must have attributes 'name',
+            'lambda_adj', 'lambda_same', 'beta', 'seed', 'group', 'notes'.
+    """
     conn = get_conn()
     conn.execute(
         "INSERT INTO runs (run_name, lambda_adj, lambda_same, beta, seed, group_name, notes) "
@@ -125,7 +178,15 @@ def cmd_add(args):
 
 
 def _clean_run(run_name):
-    """Remove run dir and results.jsonl entry for a run before rerunning."""
+    """
+    Delete a run's directory and remove its entry from results.jsonl.
+
+    Called before rerunning a failed or reset run to ensure a clean slate.
+    Silently skips if the run directory or results.jsonl does not exist.
+
+    Args:
+        run_name (str): The run identifier matching a subdirectory of runs/.
+    """
     run_dir = os.path.join(PROJECT_ROOT, 'runs', run_name)
     if os.path.isdir(run_dir):
         import shutil
@@ -139,6 +200,18 @@ def _clean_run(run_name):
 
 
 def _write_config(row):
+    """
+    Overwrite config.yaml with the hyperparameters from a plan database row.
+
+    Reads the current config.yaml, updates only the keys that are controlled
+    by the experiment plan (run_name, model, n_images, max_iterations,
+    eval_every, patience, beta, lambda_adj, lambda_same, n_eval_batches,
+    balanced_clustering, notes, seed), and writes the result back.
+
+    Args:
+        row (sqlite3.Row): A row from the plan database with all required
+            hyperparameter columns.
+    """
     cfg_path = os.path.join(PROJECT_ROOT, 'config.yaml')
     with open(cfg_path) as f:
         cfg = yaml.safe_load(f)
@@ -164,6 +237,19 @@ def _write_config(row):
 
 
 def cmd_run_all(args):
+    """
+    Execute all pending runs in order, streaming output to stdout and a log file.
+
+    For each pending run: cleans any prior artifacts, writes config.yaml, marks
+    the run as 'running', spawns main.py as a subprocess, and marks it 'done'
+    on success or resets it to 'pending' on failure. Pressing Ctrl-C sets a
+    flag that stops the loop cleanly after the current run finishes. When all
+    runs complete, calls _run_analysis() to regenerate summary tables.
+
+    Args:
+        args: Parsed argparse namespace (not used; present for dispatch
+            uniformity).
+    """
     conn = get_conn()
     stop_after_current = [False]
 
@@ -225,6 +311,12 @@ def cmd_run_all(args):
 
 
 def _run_analysis():
+    """
+    Run the post-experiment analysis scripts after all runs finish.
+
+    Sequentially executes compare_runs.py and anova_analysis.py from the
+    project root so that summary tables and figures are up to date.
+    """
     print("\n[plan] Running analysis scripts...")
     for script in ['scripts/compare_runs.py', 'scripts/anova_analysis.py']:
         subprocess.run([sys.executable, os.path.join(PROJECT_ROOT, script)], cwd=PROJECT_ROOT)
@@ -233,6 +325,12 @@ def _run_analysis():
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main():
+    """
+    Parse CLI arguments and dispatch to the appropriate command function.
+
+    Supported subcommands: init, list, run-all, mark-done, reset, add.
+    Each subcommand maps to a cmd_* function defined above.
+    """
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest='cmd', required=True)
 

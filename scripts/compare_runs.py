@@ -17,6 +17,15 @@ RUNS_DIR     = os.path.join(PROJECT_ROOT, 'runs')
 
 
 def load_results():
+    """
+    Load all run summaries from results.jsonl.
+
+    Returns:
+        list[dict]: One dictionary per run, parsed from JSON lines.
+
+    Raises:
+        SystemExit: If results.jsonl does not exist yet.
+    """
     if not os.path.exists(RESULTS_PATH):
         print(f"No results.jsonl yet at {RESULTS_PATH}.")
         sys.exit(1)
@@ -25,6 +34,16 @@ def load_results():
 
 
 def print_table(results):
+    """
+    Print a markdown-style comparison table of all runs to stdout.
+
+    Columns include run name, hyperparameters (beta, lambda_same), best ARI,
+    the iteration at which that best ARI was achieved, adjacency and same-image
+    AUROC/AUPRC, final ARI, purity, training duration, and any notes.
+
+    Args:
+        results (list[dict]): Run summaries as returned by load_results().
+    """
     cols = [
         ('run',                 'Run'),
         ('beta',                'beta'),
@@ -53,6 +72,17 @@ def print_table(results):
 
 
 def plot_curves(results):
+    """
+    Overlay training curves for all runs and save as runs_comparison.png.
+
+    For each run that has a training_log.jsonl in its run directory, plots
+    ARI and adjacency AUPRC (or F1 as a fallback) against training iteration.
+    The figure is saved to the project root.
+
+    Args:
+        results (list[dict]): Run summaries as returned by load_results().
+            Each entry must have a 'run' key matching a subdirectory of runs/.
+    """
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -85,6 +115,13 @@ def plot_curves(results):
 
 
 def main():
+    """
+    Parse CLI arguments, load results, print the comparison table, and
+    optionally save training-curve plots.
+
+    Flags:
+        --plot: If set, also call plot_curves() to save runs_comparison.png.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('--plot', action='store_true', help='also save runs_comparison.png')
     args = parser.parse_args()

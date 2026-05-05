@@ -39,12 +39,36 @@ N_BINS    = 60
 
 
 def n_neg_over_n_pos(n_images, grid):
+    """
+    Compute the ratio of non-adjacent to adjacent fragment pairs.
+
+    Used to scale the positive-class weight in the weighted BCE loss so that
+    the loss contribution from rare adjacent pairs balances that of the
+    majority non-adjacent pairs.
+
+    Args:
+        n_images (int): Number of images in the batch.
+        grid (int): Grid size; each image contributes grid*grid fragments.
+
+    Returns:
+        float: (n_total_pairs - n_adjacent) / n_adjacent.
+    """
     n_pos = n_images * (2 * grid * (grid - 1))
     n_pairs = (n_images * grid * grid) * (n_images * grid * grid - 1) // 2
     return (n_pairs - n_pos) / n_pos
 
 
 def find_best_run():
+    """
+    Find the run with the highest best_ari that has a checkpoint on disk.
+
+    Reads all entries from results.jsonl, filters to those whose model.pt file
+    exists under runs/{run_name}/, and returns the one with the maximum
+    best_ari value.
+
+    Returns:
+        dict: The results.jsonl entry for the best run.
+    """
     with open(RESULTS) as f:
         runs = [json.loads(line) for line in f]
     runs_with_ckpt = [r for r in runs
@@ -53,6 +77,19 @@ def find_best_run():
 
 
 def load_model(run_summary):
+    """
+    Load the FragmentAdjacencyPredictor from a run's checkpoint directory.
+
+    Reads config.yaml stored alongside the checkpoint to reconstruct the exact
+    hyperparameters used during training, then loads the saved weights.
+
+    Args:
+        run_summary (dict): A results.jsonl entry containing at least a 'run'
+            key matching a subdirectory of runs/.
+
+    Returns:
+        tuple[FragmentAdjacencyPredictor, dict]: Loaded model and its config.
+    """
     run_dir = os.path.join(PROJECT_ROOT, 'runs', run_summary['run'])
     with open(os.path.join(run_dir, 'config.yaml')) as f:
         cfg = yaml.safe_load(f)
@@ -68,8 +105,22 @@ def load_model(run_summary):
 
 
 def categorise_pairs(labels, adjacency, idx_i, idx_j):
-    """Return three boolean masks (adjacent, same_not_adj, cross) covering
-    every (i, j) pair."""
+    """
+    Partition fragment pairs into three mutually exclusive categories.
+
+    Args:
+        labels (np.ndarray): Ground-truth source-image index per fragment,
+            shape (N,).
+        adjacency (np.ndarray): Binary adjacency matrix, shape (N, N).
+        idx_i (np.ndarray): Row indices of the upper-triangular pairs.
+        idx_j (np.ndarray): Column indices of the upper-triangular pairs.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray, np.ndarray]:
+            adjacent     -- Boolean mask; True if fragments share an edge.
+            same_not_adj -- True if same source image but not adjacent.
+            cross        -- True if from different source images.
+    """
     same_image = labels[idx_i] == labels[idx_j]
     adjacent = adjacency[idx_i, idx_j].astype(bool)
     same_not_adj = same_image & (~adjacent)
@@ -78,6 +129,15 @@ def categorise_pairs(labels, adjacency, idx_i, idx_j):
 
 
 def main():
+    """
+    Auto-select the best checkpoint, collect per-pair scores over N_BATCHES
+    validation batches, and write the weight-distribution histogram and LaTeX
+    snippet to doc/figures/.
+
+    Scores are split by pair class (adjacent / same-image-not-adjacent /
+    cross-image) and overlaid on a single log-scale histogram. Summary
+    percentile statistics are printed to stdout.
+    """
     run = find_best_run()
     print(f"Best run: {run['run']}  (best ARI = {run['best_ari']})")
     model, cfg = load_model(run)

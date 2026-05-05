@@ -41,12 +41,39 @@ N_BATCHES = 10
 
 
 def n_neg_over_n_pos(n_images, grid):
+    """
+    Compute the ratio of non-adjacent to adjacent fragment pairs.
+
+    Used to scale the positive-class weight in the weighted BCE loss so that
+    the loss contribution from rare adjacent pairs balances that of the
+    majority non-adjacent pairs.
+
+    Args:
+        n_images (int): Number of images in the batch.
+        grid (int): Grid size; each image contributes grid*grid fragments.
+
+    Returns:
+        float: (n_total_pairs - n_adjacent) / n_adjacent.
+    """
     n_pos = n_images * (2 * grid * (grid - 1))
     n_pairs = (n_images * grid * grid) * (n_images * grid * grid - 1) // 2
     return (n_pairs - n_pos) / n_pos
 
 
 def find_best_run():
+    """
+    Find the run with the highest best_ari that has a checkpoint on disk.
+
+    Reads all entries from results.jsonl, filters to those whose model.pt
+    file exists under runs/{run_name}/, and returns the one with the
+    maximum best_ari value.
+
+    Returns:
+        dict: The results.jsonl entry for the best run.
+
+    Raises:
+        RuntimeError: If no run with a saved checkpoint is found.
+    """
     with open(RESULTS) as f:
         runs = [json.loads(line) for line in f]
 
@@ -60,6 +87,19 @@ def find_best_run():
 
 
 def load_model(run_summary):
+    """
+    Load the FragmentAdjacencyPredictor from a run's checkpoint directory.
+
+    Reads config.yaml stored alongside the checkpoint to reconstruct the exact
+    hyperparameters used during training, then loads the saved weights.
+
+    Args:
+        run_summary (dict): A results.jsonl entry containing at least a 'run'
+            key matching a subdirectory of runs/.
+
+    Returns:
+        tuple[FragmentAdjacencyPredictor, dict]: Loaded model and its config.
+    """
     run_dir = os.path.join(PROJECT_ROOT, 'runs', run_summary['run'])
     with open(os.path.join(run_dir, 'config.yaml')) as f:
         cfg = yaml.safe_load(f)
@@ -75,8 +115,23 @@ def load_model(run_summary):
 
 
 def collect_scores(model, cfg, n_batches):
-    """Run the adjacency head on `n_batches` fresh validation batches and
-    concatenate per-pair predictions and labels."""
+    """
+    Collect per-pair adjacency scores and ground-truth labels from the model.
+
+    Runs the adjacency head on n_batches fresh validation batches. For each
+    batch, all upper-triangular fragment pairs are scored; results are
+    concatenated across batches.
+
+    Args:
+        model (FragmentAdjacencyPredictor): Loaded model in eval mode.
+        cfg (dict): Run config (uses 'data_path', 'n_images').
+        n_batches (int): Number of validation batches to aggregate.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]:
+            probs   -- Predicted adjacency scores, shape (n_pairs,).
+            targets -- Ground-truth adjacency labels (0 or 1), shape (n_pairs,).
+    """
     np.random.seed(42)
     ds  = Imagenet64(cfg['data_path'])
     gen = ds.datagen_cls(batch_size=cfg['n_images'], ds='test', augmentation=False)
@@ -103,6 +158,21 @@ def collect_scores(model, cfg, n_batches):
 
 
 def make_figure(probs, targets, run_summary):
+    """
+    Plot ROC and Precision-Recall curves and save the figure to doc/figures/.
+
+    The left panel shows the ROC curve with the random diagonal baseline; the
+    right panel shows the Precision-Recall curve with the random (positive-rate)
+    baseline. Both AUROC and AUPRC are annotated in the legend.
+
+    Args:
+        probs (np.ndarray): Predicted adjacency scores, shape (n_pairs,).
+        targets (np.ndarray): Ground-truth adjacency labels, shape (n_pairs,).
+        run_summary (dict): Results entry for the best run (used in the title).
+
+    Returns:
+        tuple[float, float, float]: auroc, auprc, pos_rate.
+    """
     auroc = roc_auc_score(targets, probs)
     auprc = average_precision_score(targets, probs)
     pos_rate = targets.mean()
@@ -146,6 +216,22 @@ def make_figure(probs, targets, run_summary):
 
 
 def write_tex(run_summary, cfg, auroc, auprc, pos_rate, n_batches, n_pairs):
+    """
+    Write an \input-able LaTeX figure environment for the ROC/PR-curve figure.
+
+    The caption includes hyperparameters, AUROC, AUPRC, the number of batches
+    aggregated, and the total pair count.
+
+    Args:
+        run_summary (dict): Results entry for the best run (provides run name).
+        cfg (dict): Run config (provides beta, lambda_adj, lambda_same).
+        auroc (float): Area under the ROC curve.
+        auprc (float): Area under the Precision-Recall curve.
+        pos_rate (float): Fraction of positive (adjacent) pairs; used as the
+            random AUPRC baseline.
+        n_batches (int): Number of validation batches aggregated.
+        n_pairs (int): Total number of fragment pairs evaluated.
+    """
     safe_name = run_summary['run'].replace('_', r'\_')
     caption = (
         f"Threshold-free adjacency-prediction curves for the best checkpoint "
@@ -174,6 +260,11 @@ def write_tex(run_summary, cfg, auroc, auprc, pos_rate, n_batches, n_pairs):
 
 
 def main():
+    """
+    Auto-select the best checkpoint, collect adjacency scores over N_BATCHES
+    validation batches, and write the ROC/PR figure and LaTeX snippet to
+    doc/figures/.
+    """
     run = find_best_run()
     print(f"Best run: {run['run']}  (best ARI = {run['best_ari']})")
     model, cfg = load_model(run)

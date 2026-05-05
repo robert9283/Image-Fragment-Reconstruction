@@ -55,19 +55,55 @@ datagen = ds.datagen_cls(batch_size=cfg['n_images'], ds='test', augmentation=Fal
 # ── clustering helpers ────────────────────────────────────────────────────────
 
 def spectral_embed(W, k):
+    """
+    Compute a k-dimensional spectral embedding of an affinity matrix.
+
+    Wraps sklearn's SpectralEmbedding with a precomputed affinity matrix and
+    a fixed random state for reproducibility.
+
+    Args:
+        W (np.ndarray): Symmetric affinity matrix of shape (N, N).
+        k (int): Number of embedding dimensions (= number of clusters).
+
+    Returns:
+        np.ndarray: Embedding matrix of shape (N, k).
+    """
     return SpectralEmbedding(
         n_components=k, affinity='precomputed', random_state=42
     ).fit_transform(W)
 
 
 def cluster_sym(W):
-    """Standard symmetric-Laplacian spectral clustering."""
+    """
+    Cluster fragments using the standard symmetric-Laplacian spectral embedding.
+
+    Computes a k-dimensional spectral embedding of W and applies balanced
+    k-means (enforcing exactly N_PER_CLUSTER fragments per cluster).
+
+    Args:
+        W (np.ndarray): Symmetric affinity matrix of shape (N, N).
+
+    Returns:
+        np.ndarray: Cluster assignments of shape (N,), integers in [0, N_CLUSTERS).
+    """
     emb = spectral_embed(W, N_CLUSTERS)
     return _balanced_kmeans(emb, k=N_CLUSTERS, size=N_PER_CLUSTER)
 
 
 def cluster_rw(W):
-    """Random-walk Laplacian: rescale embedding rows by 1/sqrt(degree)."""
+    """
+    Cluster fragments using the random-walk Laplacian spectral embedding.
+
+    Computes the same symmetric-Laplacian embedding as cluster_sym, then
+    rescales each row by 1/sqrt(degree) to approximate the random-walk
+    normalisation. Applies balanced k-means on the rescaled embedding.
+
+    Args:
+        W (np.ndarray): Symmetric affinity matrix of shape (N, N).
+
+    Returns:
+        np.ndarray: Cluster assignments of shape (N,), integers in [0, N_CLUSTERS).
+    """
     emb = spectral_embed(W, N_CLUSTERS)
     degrees = W.sum(axis=1)
     emb_rw = emb / np.sqrt(degrees[:, None])

@@ -38,15 +38,39 @@ RESULTS    = os.path.join(PROJECT_ROOT, 'results.jsonl')
 
 
 def n_neg_over_n_pos(n_images, grid):
-    """Constant ratio of non-adjacent to adjacent pairs for the given grid."""
+    """
+    Compute the ratio of non-adjacent to adjacent fragment pairs.
+
+    Used to scale the positive-class weight in the weighted BCE loss so that
+    the loss contribution from rare adjacent pairs balances that of the
+    majority non-adjacent pairs.
+
+    Args:
+        n_images (int): Number of images in the batch.
+        grid (int): Grid size; each image contributes grid*grid fragments.
+
+    Returns:
+        float: (n_total_pairs - n_adjacent) / n_adjacent.
+    """
     n_pos = n_images * (2 * grid * (grid - 1))
     n_pairs = (n_images * grid * grid) * (n_images * grid * grid - 1) // 2
     return (n_pairs - n_pos) / n_pos
 
 
 def find_best_run():
-    """Return the results.jsonl entry with the highest best_ari whose
-    checkpoint actually exists on disk."""
+    """
+    Find the run with the highest best_ari that has a checkpoint on disk.
+
+    Reads all entries from results.jsonl, filters to those whose model.pt
+    file exists under runs/{run_name}/, and returns the one with the
+    maximum best_ari value.
+
+    Returns:
+        dict: The results.jsonl entry for the best run.
+
+    Raises:
+        RuntimeError: If no run with a saved checkpoint is found.
+    """
     with open(RESULTS) as f:
         runs = [json.loads(line) for line in f]
 
@@ -60,6 +84,19 @@ def find_best_run():
 
 
 def load_model(run_summary):
+    """
+    Load the FragmentAdjacencyPredictor from a run's checkpoint directory.
+
+    Reads the config.yaml stored alongside the checkpoint to reconstruct the
+    exact hyperparameters used during training, then loads the saved weights.
+
+    Args:
+        run_summary (dict): A results.jsonl entry containing at least a 'run'
+            key matching a subdirectory of runs/.
+
+    Returns:
+        tuple[FragmentAdjacencyPredictor, dict]: Loaded model and its config.
+    """
     run_dir = os.path.join(PROJECT_ROOT, 'runs', run_summary['run'])
     with open(os.path.join(run_dir, 'config.yaml')) as f:
         cfg = yaml.safe_load(f)
@@ -75,7 +112,23 @@ def load_model(run_summary):
 
 
 def hungarian_match(pred, true, k=10):
-    """Map predicted cluster IDs to true source IDs by Hungarian assignment."""
+    """
+    Map predicted cluster IDs to true source IDs via Hungarian assignment.
+
+    Builds a k×k cost matrix where cost[i, j] is the negative overlap between
+    predicted cluster i and true class j, then finds the assignment maximising
+    total overlap.
+
+    Args:
+        pred (np.ndarray): Predicted cluster assignments, shape (N,).
+        true (np.ndarray): Ground-truth source-image indices, shape (N,).
+        k (int): Number of clusters / source images. Default 10.
+
+    Returns:
+        np.ndarray: Remapped predicted labels of shape (N,), aligned so that
+            each predicted cluster ID corresponds to the best-matching true
+            source-image ID.
+    """
     cost = np.zeros((k, k))
     for i in range(k):
         for j in range(k):
@@ -86,8 +139,22 @@ def hungarian_match(pred, true, k=10):
 
 
 def select_failures(misclassified, labels, n=6):
-    """Pick `n` misclassified fragments coming from `n` distinct source images
-    if possible, otherwise fall back to the first n."""
+    """
+    Select up to n misclassified fragments from distinct source images.
+
+    Iterates over the misclassified indices and greedily picks one fragment
+    per source image for visual diversity. If fewer than n distinct source
+    images are represented, fills the remainder with any remaining
+    misclassified fragments.
+
+    Args:
+        misclassified (np.ndarray): Indices of incorrectly clustered fragments.
+        labels (np.ndarray): Ground-truth source-image index per fragment.
+        n (int): Maximum number of fragments to select. Default 6.
+
+    Returns:
+        list[int]: Selected fragment indices (length ≤ n).
+    """
     chosen, seen = [], set()
     for idx in misclassified:
         if labels[idx] not in seen:
@@ -104,6 +171,17 @@ def select_failures(misclassified, labels, n=6):
 
 
 def style_axis(ax, color):
+    """
+    Apply a coloured border to a matplotlib axis and remove tick marks.
+
+    Used to visually distinguish the three columns of the failure-modes figure
+    (red for misclassified fragment, green for true source, orange for
+    predicted source).
+
+    Args:
+        ax (matplotlib.axes.Axes): The axis to style.
+        color (str): Border colour string (e.g. 'red', 'green', 'orange').
+    """
     for spine in ax.spines.values():
         spine.set_color(color)
         spine.set_linewidth(2)
@@ -111,6 +189,26 @@ def style_axis(ax, color):
 
 
 def make_figure(images, fragments, labels, pred, pred_matched, run_summary, cfg):
+    """
+    Produce and save the failure-modes figure.
+
+    Each row shows one misclassified fragment alongside its true source image
+    (green border) and the source image the model wrongly assigned it to
+    (orange border). Selects up to 4 failures from distinct source images for
+    visual diversity.
+
+    Args:
+        images (np.ndarray): Batch of source images, shape (n_images, 64, 64, 3).
+        fragments (np.ndarray): All extracted fragments, shape (N, 16, 16, 3).
+        labels (np.ndarray): Ground-truth source-image index per fragment, shape (N,).
+        pred (np.ndarray): Raw predicted cluster assignments, shape (N,).
+        pred_matched (np.ndarray): Hungarian-aligned predicted labels, shape (N,).
+        run_summary (dict): Results entry for the best run (used for printing).
+        cfg (dict): Run config (not directly used in the figure body).
+
+    Returns:
+        int: Total number of misclassified fragments in this batch.
+    """
     misclassified = np.where(pred_matched != labels)[0]
     print(f"Misclassified: {len(misclassified)} / {len(labels)} fragments")
 
@@ -153,6 +251,21 @@ def make_figure(images, fragments, labels, pred, pred_matched, run_summary, cfg)
 
 
 def write_tex(run_summary, cfg, n_misclassified, total):
+    """
+    Write an \input-able LaTeX figure environment for the failure-modes figure.
+
+    The generated .tex file includes a caption with hyperparameters, the
+    best ARI, and the misclassification count. It references the PNG by
+    filename so that the LaTeX document must include it via \graphicspath or
+    an equivalent.
+
+    Args:
+        run_summary (dict): Results entry for the best run (provides run name
+            and best_ari).
+        cfg (dict): Run config (provides beta, lambda_adj, lambda_same).
+        n_misclassified (int): Number of incorrectly clustered fragments.
+        total (int): Total number of fragments in the batch.
+    """
     safe_name = run_summary['run'].replace('_', r'\_')
     caption = (
         f"Selected misclassified fragments from the best checkpoint "
@@ -184,6 +297,10 @@ def write_tex(run_summary, cfg, n_misclassified, total):
 
 
 def main():
+    """
+    Auto-select the best checkpoint, run clustering on one test batch,
+    and write the failure-modes figure and LaTeX snippet to doc/figures/.
+    """
     run = find_best_run()
     print(f"Best run: {run['run']}  (best ARI = {run['best_ari']})")
     model, cfg = load_model(run)
