@@ -48,7 +48,7 @@ input slot. No image-level labels are needed: the only supervision is whether tw
 fragments are adjacent, which follows directly from their grid positions.
 
 \paragraph{Why adjacency prediction?}
-We preferred this over contrastive approaches because the adjacency signal is
+I preferred this over contrastive approaches because the adjacency signal is
 local and geometrically interpretable --- each label has a direct spatial
 meaning --- which makes failure modes transparent and mirrors the edge-continuity
 cues humans use when solving jigsaw puzzles. This made it easier to reason about
@@ -62,7 +62,7 @@ bottlenecks and diagnose where the model struggled.
 The model is trained to predict spatial adjacency: $y_{ij}=1$ iff fragments
 $i$ and $j$ are grid-neighbours within the same image. With $N=10$ images on
 a $4{\times}4$ grid, the negative-to-positive ratio is exactly
-$12{,}480/240 = 52$. We use weighted BCE with tilt parameter $\beta$:
+$12{,}480/240 = 52$. I use weighted BCE with tilt parameter $\beta$:
 \begin{align*}
   \mathcal{L}_{\text{WBCE}}(\beta) = -\tfrac{1}{N}\!\sum_{(i,j)}\bigl[
   &\beta\cdot 52\; y_{ij}\log p_{ij} \\
@@ -71,10 +71,10 @@ $12{,}480/240 = 52$. We use weighted BCE with tilt parameter $\beta$:
 
 \paragraph{Multi-task loss.}
 Adjacency is a local signal; the downstream task is global clustering.
-We observed that the model quickly reaches AUROC\,$>$\,0.95 on the pretext
+I observed that the model quickly reaches AUROC\,$>$\,0.95 on the pretext
 task, yet ARI remains well below 1 --- because adjacency only supervises
 nearest-neighbour pairs, leaving fragments from opposite corners of the same
-image as negatives. We hypothesised that adding a same-image loss term
+image as negatives. I hypothesised that adding a same-image loss term
 $\mathcal{L}_{\text{BCE}}^{\text{same}}$ would provide a less local signal,
 pulling all fragments from the same source together regardless of position:
 \[
