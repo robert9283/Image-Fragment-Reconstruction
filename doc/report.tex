@@ -79,8 +79,8 @@ bridge this gap, acting on the same score $p_{ij}$:
 \]
 
 \paragraph{Inference.}
-To recover the original source images, the pairwise scores must be turned
-into hard cluster assignments. The $160{\times}160$ matrix of scores $p_{ij}$
+To assign each fragment to its source image, the pairwise scores must be
+turned into hard cluster assignments. The $160{\times}160$ matrix of scores $p_{ij}$
 is used directly as a similarity matrix for \textbf{balanced spectral
 clustering}: spectral embedding finds clusters as well-connected subgraphs of
 the similarity graph, while the Hungarian-assignment balanced $k$-means step
