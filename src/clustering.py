@@ -1,3 +1,16 @@
+"""
+Clustering algorithms and evaluation metrics for fragment assignment.
+
+Given the pairwise similarity matrix produced by FragmentAdjacencyPredictor,
+this module converts it into discrete cluster assignments (one cluster per
+source image) and measures the quality of those assignments.
+
+Functions:
+    cluster          -- Route to spectral clustering or (balanced) k-means.
+    _balanced_kmeans -- Capacity-constrained k-means via Hungarian assignment.
+    compute_metrics  -- Compute ARI, NMI, and purity from predicted labels.
+    _purity          -- Fraction of fragments assigned to their majority cluster.
+"""
 import numpy as np
 from sklearn.cluster import KMeans, SpectralClustering
 from sklearn.manifold import SpectralEmbedding
@@ -9,13 +22,25 @@ N_CLUSTERS = 10
 
 def cluster(model_output, k=N_CLUSTERS, n_per_cluster=None):
     """
-    Routes to the right clustering algorithm based on model output shape.
-      (N, D) where D != N  → (balanced) k-means on embeddings
-      (N, N)               → spectral clustering on similarity matrix
+    Assign fragments to clusters based on model output.
 
-    If `n_per_cluster` is given, enforces clusters of exactly that size via a
-    Hungarian assignment of points to k×n_per_cluster slots after k-means
-    initialisation.
+    Routes to the appropriate algorithm depending on output shape:
+      - (N, N) similarity matrix → spectral embedding + k-means (or balanced k-means)
+      - (N, D) embedding matrix  → k-means directly on the embeddings
+
+    When n_per_cluster is set, balanced k-means is used to enforce exactly
+    n_per_cluster fragments per cluster (requires N == k * n_per_cluster).
+
+    Args:
+        model_output (np.ndarray): Either an (N, N) pairwise similarity matrix
+            or an (N, D) embedding matrix.
+        k (int): Number of clusters. Default 10 (one per source image).
+        n_per_cluster (int or None): If set, each cluster is forced to contain
+            exactly this many fragments. Pass GRID*GRID (=16) for balanced
+            clustering. Default None (unconstrained).
+
+    Returns:
+        np.ndarray: Integer cluster label for each fragment, shape (N,).
     """
     n = model_output.shape[0]
     is_similarity = model_output.ndim == 2 and model_output.shape[1] == n
@@ -38,10 +63,26 @@ def cluster(model_output, k=N_CLUSTERS, n_per_cluster=None):
 
 def _balanced_kmeans(features, k, size, n_iter=20):
     """
-    Balanced k-means: each cluster gets exactly `size` points.
+    Capacity-constrained k-means where every cluster gets exactly `size` points.
 
-    Iterates: (1) compute distances to centroids, (2) Hungarian-assign points
-    to k×size slots with capacity `size` per cluster, (3) update centroids.
+    Initialises centroids with standard k-means, then iterates:
+      1. Compute squared distances from every point to every centroid.
+      2. Solve a linear assignment problem over k*size slots (size slots per cluster)
+         to find the globally cheapest assignment that respects capacities.
+      3. Recompute centroids as the mean of assigned points.
+    Stops early if centroids do not change between iterations.
+
+    Args:
+        features (np.ndarray): Feature matrix of shape (N, D), where N == k * size.
+        k (int): Number of clusters.
+        size (int): Required number of points per cluster.
+        n_iter (int): Maximum number of iterations. Default 20.
+
+    Returns:
+        np.ndarray: Integer cluster label for each point, shape (N,).
+
+    Raises:
+        AssertionError: If features.shape[0] != k * size.
     """
     assert features.shape[0] == k * size, \
         f"need exactly {k * size} points, got {features.shape[0]}"
@@ -69,7 +110,20 @@ def _balanced_kmeans(features, k, size, n_iter=20):
 
 
 def compute_metrics(pred_labels, true_labels):
-    """Returns dict with ARI, NMI, and purity."""
+    """
+    Compute clustering quality metrics given predicted and true fragment labels.
+
+    Args:
+        pred_labels (np.ndarray): Predicted cluster assignments, shape (N,).
+        true_labels (np.ndarray): Ground-truth source-image indices, shape (N,).
+
+    Returns:
+        dict: {
+            'ari':    Adjusted Rand Index (float, range roughly -1 to 1),
+            'nmi':    Normalised Mutual Information (float, range 0 to 1),
+            'purity': Cluster purity (float, range 0 to 1),
+        }
+    """
     return {
         'ari':    adjusted_rand_score(true_labels, pred_labels),
         'nmi':    normalized_mutual_info_score(true_labels, pred_labels),
@@ -78,6 +132,19 @@ def compute_metrics(pred_labels, true_labels):
 
 
 def _purity(true_labels, pred_labels):
+    """
+    Compute cluster purity: fraction of fragments in their cluster's majority class.
+
+    For each predicted cluster, counts how many fragments belong to the most
+    common true source image, then divides the total count by N.
+
+    Args:
+        true_labels (np.ndarray): Ground-truth source-image indices, shape (N,).
+        pred_labels (np.ndarray): Predicted cluster assignments, shape (N,).
+
+    Returns:
+        float: Purity score in [0, 1]. Higher is better.
+    """
     total = 0
     for cluster_id in np.unique(pred_labels):
         mask = pred_labels == cluster_id
