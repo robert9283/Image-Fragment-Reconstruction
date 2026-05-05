@@ -1,15 +1,29 @@
 data_path: to_share/data
 model: fragment-adjacency-predictor
-run_name: same_only_seed_4
-notes: same-image-only, ANOVA replicate (lambda_adj=0)
+
+# Unique identifier for this run; a subdirectory runs/{run_name}/ will be created.
+run_name: adj_beta1_seed_4
+notes: adj-only beta=1 (cond e)
+
+# Number of source images per training batch (each image contributes 16 fragments).
 n_images: 10
-max_iterations: 25000
-eval_every: 250
-patience: 10
-beta: 0.01923
-lambda_adj: 0.0
-lambda_same: 1.0
-pos_weight_same: 1.0
-n_eval_batches: 20
-balanced_clustering: true
+
+# Training duration and evaluation schedule.
+max_iterations: 25000  # total gradient steps
+eval_every: 250        # run validation every N iterations
+patience: 10           # stop after N consecutive evals without ARI improvement
+
+# Loss hyperparameters.
+# beta scales the positive-class weight in the adjacency WBCE loss.
+# Setting beta = 1/ratio (~0.01923) gives equal total weight to positive and
+# negative pairs. Setting beta = 1.0 gives a much stronger push on positives.
+beta: 1.0
+lambda_adj: 1.0   # weight of the adjacency loss term
+lambda_same: 0.0  # weight of the same-image loss term (0 = disabled)
+
+# Evaluation settings.
+n_eval_batches: 20       # number of validation batches averaged per eval point
+balanced_clustering: true  # enforce exactly 16 fragments per cluster during eval
+
+# Random seed for torch and numpy (remove key to use a random seed).
 seed: 4
