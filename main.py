@@ -1,3 +1,19 @@
+"""
+Training entry point for the image fragment reconstruction model.
+
+This module ties together data loading, model construction, the training loop,
+and result logging. Running it directly trains the model defined in config.yaml
+and writes all outputs (config snapshot, training log, checkpoint) to a
+timestamped subdirectory under runs/.
+
+Functions:
+    load_config       -- Load hyperparameters from config.yaml.
+    n_neg_over_n_pos  -- Compute the negative-to-positive pair ratio for WBCE.
+    load_model        -- Instantiate the model specified in the config.
+    setup_run_dir     -- Create the run directory and refresh the latest symlink.
+    append_results_summary -- Append a one-line run summary to results.jsonl.
+    main              -- Full training loop with evaluation and early stopping.
+"""
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'to_share', 'src'))
