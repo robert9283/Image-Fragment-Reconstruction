@@ -85,7 +85,6 @@ config.yaml              # hyperparameters; one source of truth
 main.py                  # training entry point
 requirements.txt
 README.md
-todo.md                  # outstanding work
 src/
   model.py               # abstract base class for all models
   fragments.py           # fragmentation + adjacency label construction
@@ -132,7 +131,6 @@ All hyperparameters live in `config.yaml`. Key knobs:
 | `beta`                | `0.01923`    | WBCE tilt parameter on adjacency (= plain BCE) |
 | `lambda_adj`          | `1.0`        | Weight on the adjacency loss |
 | `lambda_same`         | `1.0`        | Weight on the same-image loss; `0` disables the head |
-| `pos_weight_same`     | `1.0`        | Weight on same-image positives (= plain BCE) |
 | `seed`                | unset        | If set, calls `torch.manual_seed` and `np.random.seed` |
 | `run_name`            | unset        | Auto-generated from timestamp if blank |
 | `notes`               | empty        | Free-form description, written into `results.jsonl` |

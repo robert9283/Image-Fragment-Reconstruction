@@ -48,11 +48,6 @@ This writes three LaTeX tables to `doc/` (`tab_anova_summary.tex`,
 (`doc/fig_anova_ari.pdf`), and prints the pooled $\hat{\sigma}$ and
 $\Delta_{\min}$ values needed to fill the TODO in `doc/approach.tex`.
 
-## Which runs are valid after the single-head refactor?
-
-See `runs_after_refactor.md`. Short version: any run with `lambda_same > 0` must
-be rerun — these are all tracked as `pending` in the DB.
-
 ## Other scripts
 
 | Script | Purpose |
