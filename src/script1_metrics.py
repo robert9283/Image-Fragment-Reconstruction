@@ -42,22 +42,30 @@ CHECKPOINT_PATH = os.environ.get('CHECKPOINT_PATH',
                     os.path.join(os.path.dirname(__file__), '..', 'runs', 'latest', 'model'))
 # ─────────────────────────────────────────────────────────────────────────────
 
-N_SAMPLES = 1000
+N_SAMPLES = 1000  # number of independent test batches to evaluate
 
-# config is read from the run directory (parent of checkpoint path)
+# ── load config from the run directory that contains the checkpoint ───────────
+# The config snapshot is always written alongside the checkpoint by main.py,
+# so hyperparameters (beta, lambda_adj, lambda_same, n_images) are guaranteed
+# to match the weights being loaded.
 RUN_DIR = os.path.dirname(os.path.realpath(CHECKPOINT_PATH))
 with open(os.path.join(RUN_DIR, 'config.yaml')) as f:
     cfg = yaml.safe_load(f)
 
-N_IMAGES = cfg.get('n_images', 10)
+N_IMAGES = cfg.get('n_images', 10)  # images per batch (= number of clusters)
 
+# ── data generator (test split, no augmentation) ─────────────────────────────
 dataset = Imagenet64(DATA_PATH)
 gen     = dataset.datagen_cls(batch_size=N_IMAGES, ds='test', augmentation=False)
 
+# ── compute the negative-to-positive pair ratio for the WBCE loss weight ──────
+# For n_images=10 and a 4×4 grid this is always 52; recomputed here from the
+# config to stay correct if those values are ever changed.
 n_pos   = N_IMAGES * 2 * GRID * (GRID - 1)
 n_pairs = (N_IMAGES * GRID**2) * (N_IMAGES * GRID**2 - 1) // 2
 ratio   = (n_pairs - n_pos) / n_pos
 
+# ── instantiate model and load checkpoint ────────────────────────────────────
 model = FragmentAdjacencyPredictor(
     pos_weight_adj = cfg.get('beta', 0.01923) * ratio,
     lambda_adj     = cfg.get('lambda_adj',  1.0),
@@ -66,15 +74,18 @@ model = FragmentAdjacencyPredictor(
 model.load(CHECKPOINT_PATH)
 print(f"Loaded checkpoint from {CHECKPOINT_PATH}")
 
+# accumulators — one entry per batch
 adjacency_results  = {'auroc': [], 'auprc': [], 'f1': []}
 clustering_results = {'ari': [], 'nmi': [], 'purity': []}
 
 for i in range(N_SAMPLES):
+    # draw a fresh batch of N_IMAGES test images and slice into 16×16 fragments
     images, _ = next(gen)
     fragments, true_labels = extract_fragments(np.array(images))
     adjacency = build_adjacency(n_images=N_IMAGES)
 
     # ── adjacency prediction ──────────────────────────────────────────────────
+    # AUROC and AUPRC are threshold-free; F1 is computed at threshold 0.5
     adj_metrics = model.evaluate_adjacency(fragments, adjacency)
     probs, idx_i, idx_j = model._pair_scores(fragments)
     targets = adjacency[idx_i.cpu().numpy(), idx_j.cpu().numpy()]
@@ -84,16 +95,20 @@ for i in range(N_SAMPLES):
     adjacency_results['f1'].append(float(f1_score(targets, preds, zero_division=0)))
 
     # ── fragment clustering ───────────────────────────────────────────────────
+    # balanced spectral clustering: each of the k=10 clusters gets exactly
+    # GRID*GRID=16 fragments, preventing the over-fragmentation bias
     similarity   = model.get_output(fragments)
     pred_labels  = cluster(similarity, n_per_cluster=GRID * GRID)
     cl_metrics   = compute_metrics(pred_labels, true_labels)
     for key, val in cl_metrics.items():
         clustering_results[key].append(val)
 
+    # print running averages every 100 batches
     if (i + 1) % 100 == 0:
         print(f"[{i + 1}/{N_SAMPLES}]  ARI={np.mean(clustering_results['ari']):.3f}  F1={np.mean(adjacency_results['f1']):.3f}")
 
-# ── assemble and save results ─────────────────────────────────────────────────
+# ── aggregate across all batches and save ────────────────────────────────────
+# ARI, NMI, and purity are reported as mean ± std to capture per-batch variance
 results = {
     'adjacency_prediction': {
         'auroc': round(float(np.mean(adjacency_results['auroc'])), 4),
